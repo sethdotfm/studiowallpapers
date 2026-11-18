@@ -44,6 +44,7 @@
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   @media (max-width: 760px) { body { grid-template-columns: 1fr; grid-template-rows: 45vh auto; } main { order: -1; } }
 </style>
+<link rel="stylesheet" href="overlay.css">
 </head>
 <body>
 <aside>
@@ -112,6 +113,10 @@
     </div>
     <p class="note" id="exportInfo"></p>
   </fieldset>
+
+  <fieldset id="overlayPanel">
+    <legend>Labels</legend>
+  </fieldset>
 </aside>
 
 <main>
@@ -119,6 +124,7 @@
   <div class="hint">Space: new seed · S: shuffle · the URL keeps your settings</div>
 </main>
 
+<script src="overlay.js"></script>
 <script>
 "use strict";
 
@@ -523,6 +529,8 @@ function drawPreview() {
   const px = fit * dpr;
   ctx.setTransform(px, 0, 0, px, 0, 0);
   render(ctx, p, W, H, px);
+  ctx.setTransform(px, 0, 0, px, 0, 0);
+  window.StudioOverlay?.draw(ctx, screens);
 
   stage.querySelectorAll(".bezel").forEach((el) => el.remove());
   const bw = Math.max(2, p.gap * fit) + "px";
@@ -559,7 +567,10 @@ function renderFull(p) {
   const { W, H, screens } = layout(p);
   const c = document.createElement("canvas");
   c.width = W; c.height = H;
-  render(c.getContext("2d"), p, W, H, 1);
+  const cctx = c.getContext("2d");
+  render(cctx, p, W, H, 1);
+  cctx.setTransform(1, 0, 0, 1, 0, 0);
+  window.StudioOverlay?.draw(cctx, screens);
   return { c, screens };
 }
 
@@ -643,6 +654,10 @@ addEventListener("keydown", (e) => {
   if (e.target.matches("input[type=number], select")) return;
   if (e.code === "Space") { e.preventDefault(); newSeed(); }
   if (e.key === "s" || e.key === "S") shuffle();
+});
+window.StudioOverlay?.mount($("overlayPanel"), {
+  onChange: schedule,
+  getPreview: () => ({ canvas: preview, settings: readSettings(), layout: layout(readSettings()) }),
 });
 drawPreview();
 </script>
