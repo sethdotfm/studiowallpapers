@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Studio Wallpapers</title>
+<style>
+  :root {
+    --bg: #0b0d0b;
+    --panel: #141714;
+    --line: #2a302a;
+    --text: #e6ebe6;
+    --muted: #8a948a;
+    --accent: #7fd321;
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+  body { display: grid; grid-template-columns: 300px 1fr; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 16px; }
+  h1 { font-size: 15px; margin: 0 0 12px; letter-spacing: .02em; }
+  fieldset { border: 0; border-top: 1px solid var(--line); margin: 0; padding: 12px 0 4px; }
+  legend { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; padding: 0 0 6px; }
+  label { display: grid; grid-template-columns: 90px 1fr 38px; align-items: center; gap: 8px; margin: 0 0 8px; }
+  label.wide { grid-template-columns: 90px 1fr; }
+  output { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  input[type=number], select { width: 100%; background: #0b0d0b; color: var(--text); border: 1px solid var(--line); padding: 4px 6px; font: inherit; }
+  input[type=color] { width: 100%; height: 26px; background: none; border: 1px solid var(--line); padding: 0; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
+  button { background: #1d221d; color: var(--text); border: 1px solid var(--line); padding: 6px 10px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #071007; border-color: var(--accent); font-weight: 600; }
+  .swatch { width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); }
+  main { position: relative; display: grid; place-items: center; padding: 24px; overflow: hidden; }
+  #stage { position: relative; max-width: 100%; max-height: 100%; }
+  #preview { display: block; width: 100%; height: auto; }
+  .bezel { position: absolute; top: 0; bottom: 0; background: var(--bg); }
+  .bezel--h { top: auto; bottom: auto; left: 0; right: 0; }
+  .hint { position: absolute; left: 24px; bottom: 12px; color: var(--muted); font-size: 12px; }
+  .note { color: var(--muted); font-size: 12px; margin: 4px 0 8px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  @media (max-width: 760px) { body { grid-template-columns: 1fr; grid-template-rows: 45vh auto; } main { order: -1; } }
+</style>
+</head>
+<body>
+<aside>
+  <h1>Studio Wallpapers</h1>
+
+  <fieldset>
+    <legend>Displays</legend>
+    <label class="wide">Resolution
+      <select id="res">
+        <option value="1920x1080">1920 × 1080</option>
+        <option value="2560x1440">2560 × 1440</option>
+        <option value="3840x2160" selected>3840 × 2160 (4K)</option>
+        <option value="3440x1440">3440 × 1440 (ultrawide)</option>
+        <option value="5120x1440">5120 × 1440 (super ultrawide)</option>
+        <option value="2880x1800">2880 × 1800 (laptop)</option>
+        <option value="1080x1920">1080 × 1920 (portrait)</option>
+        <option value="custom">Custom…</option>
+      </select>
+    </label>
+    <div class="row" id="customRes" hidden>
+      <input type="number" id="w" min="320" max="16384" value="3840" aria-label="Width">
+      <input type="number" id="h" min="320" max="16384" value="2160" aria-label="Height">
+    </div>
+    <label>Columns <input type="range" id="cols" min="1" max="6" value="1"><output></output></label>
+    <label>Rows <input type="range" id="rows" min="1" max="4" value="1"><output></output></label>
+    <label>Bezel gap <input type="range" id="gap" min="0" max="200" value="40"><output></output></label>
+    <p class="note">Gap is the physical bezel in pixels. The art runs behind it, so swooshes line up across screens.</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Colour</legend>
+    <label class="wide">Accent <input type="color" id="accent" value="#7fd321"></label>
+    <div class="row" id="swatches"></div>
+    <label>Background <input type="range" id="bgGlow" min="0" max="100" value="45"><output></output></label>
+    <label>Whites <input type="range" id="whites" min="0" max="100" value="45"><output></output></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Shape</legend>
+    <label>Busyness <input type="range" id="busy" min="0" max="100" value="40"><output></output></label>
+    <label>Fill <input type="range" id="fill" min="0" max="100" value="40"><output></output></label>
+    <label>Angle <input type="range" id="angle" min="-60" max="60" value="22"><output></output></label>
+    <label>Spread <input type="range" id="spread" min="0" max="100" value="50"><output></output></label>
+    <label>Curl <input type="range" id="curl" min="0" max="100" value="20"><output></output></label>
+    <label>Glow <input type="range" id="glow" min="0" max="100" value="70"><output></output></label>
+    <label>Pixel bits <input type="range" id="bits" min="0" max="100" value="0"><output></output></label>
+    <label>Grain <input type="range" id="grain" min="0" max="100" value="8"><output></output></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Seed</legend>
+    <label class="wide">Seed <input type="number" id="seed" min="0" max="999999999"></label>
+    <div class="row">
+      <button id="reseed" title="Space">New seed</button>
+      <button id="shuffle" title="S">Shuffle all</button>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Export</legend>
+    <div class="row">
+      <button class="primary" id="exportSpan">Download span PNG</button>
+      <button id="exportEach">One PNG per monitor</button>
+    </div>
+    <p class="note" id="exportInfo"></p>
+  </fieldset>
+</aside>
+
+<main>
+  <div id="stage"><canvas id="preview"></canvas></div>
+  <div class="hint">Space: new seed · S: shuffle · the URL keeps your settings</div>
+</main>
+
+<script>
+"use strict";
+
+const PALETTES = ["#7fd321", "#107c10", "#3ad16b", "#c8ff3d", "#2fd6b0", "#e8e8e8", "#38a8ff", "#ff5a36"];
+const $ = (id) => document.getElementById(id);
+const ctrlIds = ["cols", "rows", "gap", "accent", "bgGlow", "whites", "busy", "fill", "angle", "spread", "curl", "glow", "bits", "grain", "seed"];
+
+// ---------- helpers ----------
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hexToHsl(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+  let h = 0, s = 0;
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h *= 60;
+  }
+  return [h, s * 100, l * 100];
+}
+
+const hsla = (h, s, l, a = 1) => `hsla(${h.toFixed(1)},${s.toFixed(1)}%,${l.toFixed(1)}%,${a.toFixed(3)})`;
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+// ---------- settings ----------
+
+function readSettings() {
+  const [rw, rh] = $("res").value === "custom" ? [+$("w").value, +$("h").value] : $("res").value.split("x").map(Number);
+  const p = { w: clamp(rw || 1920, 320, 16384), h: clamp(rh || 1080, 320, 16384), res: $("res").value };
+  for (const id of ctrlIds) p[id] = id === "accent" ? $(id).value : +$(id).value;
+  return p;
+}
+
+function layout(p) {
+  const cols = p.cols, rows = p.rows, gap = p.gap, screens = [];
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) screens.push({ x: c * (p.w + gap), y: r * (p.h + gap), w: p.w, h: p.h, col: c, row: r });
+  return { W: cols * p.w + (cols - 1) * gap, H: rows * p.h + (rows - 1) * gap, cols, rows, screens };
+}
+
+// ---------- the generator ----------
+// Everything is laid out in virtual-canvas units (the full span incl. bezels), with sizes relative to H,
+// so a preview and a full-size export of the same settings draw the same picture.
+
+function buildScene(p, W, H) {
+  const rnd = mulberry32(p.seed);
+  const r = (a = 0, b = 1) => lerp(a, b, rnd());
+  const gauss = () => (rnd() + rnd() + rnd() - 1.5) / 1.5;
+  const busy = p.busy / 100, fill = p.fill / 100, spread = p.spread / 100, curl = p.curl / 100, whites = p.whites / 100;
+
+  const ang = (p.angle * Math.PI) / 180;
+  // Wide spans flatten the slope and add ribbons, so the swoosh crosses every screen.
+  const aspect = Math.max(1, W / H / (16 / 9));
+  const dl = Math.hypot(Math.cos(ang) * aspect, Math.sin(ang));
+  const d = [(Math.cos(ang) * aspect) / dl, -Math.sin(ang) / dl];
+  const nrm = [-d[1], d[0]];
+  const focal = [W * r(0.38, 0.62), H * r(0.42, 0.62)];
+  const L = Math.hypot(W, H) * 0.75;
+
+  const count = Math.round(lerp(4, 26, busy) * Math.sqrt(aspect));
+  const ribbons = [];
+  // One shared fan direction per side gives the "two bundles crossing" look instead of noise.
+  const sideBias = [r(-1, 1), r(-1, 1)];
+  const bowDir = r(-1, 1);
+
+  for (let i = 0; i < count; i++) {
+    const roll = rnd();
+    let kind;
+    if (roll < 0.3) kind = "sheet";
+    else if (roll < 0.8) kind = "band";
+    else if (roll < 0.8 + 0.08 * fill) kind = "dark";
+    else kind = "line";
+
+    const offF = gauss() * H * lerp(0.02, 0.2, spread);
+    const offL = (sideBias[0] * 0.8 + gauss()) * H * lerp(0.3, 1.8, spread);
+    const offR = (sideBias[1] * 0.8 + gauss()) * H * lerp(0.3, 1.8, spread);
+    const k = r(1.5, 3);
+    const bow = (bowDir * 0.7 + gauss()) * H * lerp(0.05, 0.35, curl);
+    const curlAmp = curl * H * r(-0.35, 0.35);
+    const curlFreq = r(0.6, 1.6), curlPh = r(0, Math.PI * 2);
+
+    const wmax = H * (kind === "sheet" ? r(0.06, 0.32) : kind === "band" ? r(0.02, 0.14) : kind === "dark" ? r(0.004, 0.02) : r(0.0012, 0.003));
+    const grow = rnd() < 0.5 ? 1 : -1;
+    const ge = r(0.6, 2);
+    const pinch = r(0.15, 0.5);
+
+    const white = rnd() < whites * (kind === "line" ? 0.7 : kind === "band" ? 0.25 : 0.15);
+    const light = r(kind === "sheet" ? 30 : 35, kind === "sheet" ? 65 : 70);
+    const alpha = kind === "sheet" ? r(0.06, 0.22) * lerp(0.6, 1.3, fill) : kind === "band" ? r(0.12, 0.35) * lerp(0.6, 2.2, fill) : kind === "dark" ? r(0.7, 1) : r(0.5, 1);
+    const fadeA = r(0, 1) * (1 - fill * 0.7), fadeB = r(0, 1) * (1 - fill * 0.7);
+    const edge = rnd() < 0.5 ? 1 : -1;
+    const sheen = r(0.18, 0.4);
+
+    const N = 160;
+    const center = [], width = [];
+    for (let j = 0; j <= N; j++) {
+      const t = (j / N) * 2 - 1;
+      const side = t < 0 ? offL : offR;
+      const perp = offF + side * Math.pow(Math.abs(t), k) + bow * (1 - t * t) + curlAmp * Math.sin(Math.PI * t * curlFreq + curlPh) * (1 - t * t * 0.5);
+      const along = t * L;
+      center.push([focal[0] + d[0] * along + nrm[0] * perp, focal[1] + d[1] * along + nrm[1] * perp]);
+      const u = grow > 0 ? (t + 1) / 2 : (1 - t) / 2;
+      width.push(wmax * (0.12 + 0.88 * Math.pow(u, ge)) * (pinch + (1 - pinch) * Math.pow(Math.abs(t), 0.7)));
+    }
+
+    const layer = { sheet: 0, dark: 1, band: 2, line: 3 }[kind] + r(-0.6, 0.6);
+    ribbons.push({ kind, center, width, white, light, alpha, fadeA, fadeB, edge, sheen, layer });
+  }
+  ribbons.sort((a, b) => a.layer - b.layer);
+
+  const trails = [];
+  const trailCount = Math.round((p.bits / 100) * 5);
+  const hosts = ribbons.filter((rb) => rb.kind === "band" || rb.kind === "line");
+  for (let i = 0; i < trailCount && hosts.length; i++) {
+    const host = hosts[Math.floor(rnd() * hosts.length)];
+    const start = r(0.05, 0.85), len = r(0.06, 0.16), side = rnd() < 0.5 ? 1 : -1;
+    const n = Math.round(r(10, 24)), size0 = H * r(0.008, 0.016);
+    const squares = [];
+    for (let s = 0; s < n; s++) {
+      if (rnd() < 0.15) continue;
+      const tt = start + (s / n) * len;
+      squares.push({ t: tt, size: size0 * lerp(1, 0.35, s / n) * r(0.6, 1.2), off: side * H * r(0.012, 0.04), tone: rnd() });
+    }
+    trails.push({ host, squares });
+  }
+
+  return { focal, ribbons, trails, rnd };
+}
+
+// `f` picks a line across the ribbon: -1 is one edge, 1 the other, 0 the centre.
+function across(rb, f) {
+  const c = rb.center, w = rb.width, out = [];
+  for (let j = 0; j < c.length; j++) {
+    const a = c[Math.max(0, j - 1)], b = c[Math.min(c.length - 1, j + 1)];
+    const m = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const hw = (w[j] / 2) * f;
+    out.push([c[j][0] + ((b[1] - a[1]) / m) * hw, c[j][1] - ((b[0] - a[0]) / m) * hw]);
+  }
+  return out;
+}
+
+function outline(rb) {
+  const c = rb.center, w = rb.width, top = [], bot = [];
+  for (let j = 0; j < c.length; j++) {
+    const a = c[Math.max(0, j - 1)], b = c[Math.min(c.length - 1, j + 1)];
+    let tx = b[0] - a[0], ty = b[1] - a[1];
+    const m = Math.hypot(tx, ty) || 1; tx /= m; ty /= m;
+    const hw = w[j] / 2;
+    top.push([c[j][0] - ty * hw, c[j][1] + tx * hw]);
+    bot.push([c[j][0] + ty * hw, c[j][1] - tx * hw]);
+  }
+  return { top, bot };
+}
+
+function tracePolyline(ctx, pts, move = true) {
+  pts.forEach((pt, i) => (i === 0 && move ? ctx.moveTo(pt[0], pt[1]) : ctx.lineTo(pt[0], pt[1])));
+}
+
+function alongGradient(ctx, rb, color, alpha) {
+  const a = rb.center[0], b = rb.center[rb.center.length - 1];
+  const g = ctx.createLinearGradient(a[0], a[1], b[0], b[1]);
+  g.addColorStop(0, color(alpha * rb.fadeA));
+  g.addColorStop(0.5, color(alpha));
+  g.addColorStop(1, color(alpha * rb.fadeB));
+  return g;
+}
+
+// Cheap wide blur: shrink the frame in steps (each step averages pixels) and screen the
+// small copies back on top. Works without ctx.filter, which Safari lacks.
+function bloom(ctx, amount) {
+  const src = ctx.canvas, cw = src.width, ch = src.height;
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalCompositeOperation = "screen";
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  let prev = src;
+  for (const [div, a] of [[4, 0.55], [12, 0.7], [36, 0.85]]) {
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, Math.round(cw / div)); c.height = Math.max(1, Math.round(ch / div));
+    const g = c.getContext("2d");
+    g.imageSmoothingQuality = "high";
+    g.drawImage(prev, 0, 0, c.width, c.height);
+    ctx.globalAlpha = a * amount;
+    ctx.drawImage(c, 0, 0, cw, ch);
+    prev = c;
+  }
+  ctx.restore();
+}
+
+// `px` is device pixels per virtual unit; shadowBlur ignores the transform, so it needs it explicitly.
+function render(ctx, p, W, H, px) {
+  const [hue, sat] = hexToHsl(p.accent);
+  const S = sat;
+  const glow = p.glow / 100;
+  const scene = buildScene(p, W, H);
+  const { focal } = scene;
+
+  ctx.save();
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, W, H);
+
+  // Soft colour wash behind the convergence point.
+  const bg = p.bgGlow / 100;
+  let g = ctx.createRadialGradient(focal[0], focal[1], 0, focal[0], focal[1], Math.max(W, H) * 0.75);
+  g.addColorStop(0, hsla(hue, S, 22, 0.9 * bg));
+  g.addColorStop(0.45, hsla(hue, S, 10, 0.5 * bg));
+  g.addColorStop(1, hsla(hue, S, 3, 0));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  for (const rb of scene.ribbons) {
+    const color = rb.white ? (a) => hsla(hue, 15, 96, a) : (a) => hsla(hue, S, rb.light, a);
+    ctx.shadowBlur = 0;
+    ctx.globalCompositeOperation = "source-over";
+
+    if (rb.kind === "line") {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.lineCap = "round";
+      ctx.strokeStyle = alongGradient(ctx, rb, color, rb.alpha);
+      ctx.lineWidth = rb.width[Math.floor(rb.width.length / 2)] + H * 0.0012;
+      ctx.beginPath(); tracePolyline(ctx, rb.center); ctx.stroke();
+      continue;
+    }
+
+    const { top, bot } = outline(rb);
+    ctx.beginPath(); tracePolyline(ctx, top); tracePolyline(ctx, bot.slice().reverse(), false); ctx.closePath();
+
+    if (rb.kind === "sheet") {
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = alongGradient(ctx, rb, color, rb.alpha);
+      ctx.fill();
+    } else if (rb.kind === "dark") {
+      ctx.fillStyle = alongGradient(ctx, rb, (a) => `rgba(0,0,0,${a.toFixed(3)})`, rb.alpha);
+      ctx.fill();
+    } else {
+      // Glass: a thin tinted body, a bright rim on the lit edge, a faint one opposite, and a soft sheen inside.
+      ctx.globalCompositeOperation = "lighter";
+      ctx.fillStyle = alongGradient(ctx, rb, color, rb.alpha);
+      ctx.fill();
+      ctx.lineCap = "round";
+      const rim = rb.white ? (a) => hsla(hue, 10, 97, a) : (a) => hsla(hue, S * 0.7, 82, a);
+      ctx.lineWidth = H * 0.0016;
+      ctx.strokeStyle = alongGradient(ctx, rb, rim, 0.9);
+      ctx.beginPath(); tracePolyline(ctx, rb.edge > 0 ? top : bot); ctx.stroke();
+      ctx.lineWidth = H * 0.0009;
+      ctx.strokeStyle = alongGradient(ctx, rb, rim, 0.35);
+      ctx.beginPath(); tracePolyline(ctx, rb.edge > 0 ? bot : top); ctx.stroke();
+      const mid = rb.width[Math.floor(rb.width.length / 2)];
+      ctx.lineWidth = Math.max(mid * rb.sheen, H * 0.002);
+      ctx.strokeStyle = alongGradient(ctx, rb, (a) => hsla(hue, S * 0.5, 88, a), 0.12);
+      ctx.beginPath(); tracePolyline(ctx, across(rb, -rb.edge * 0.55)); ctx.stroke();
+    }
+  }
+
+  // Bloom where the ribbons cross.
+  ctx.shadowBlur = 0;
+  ctx.globalCompositeOperation = "lighter";
+  g = ctx.createRadialGradient(focal[0], focal[1], 0, focal[0], focal[1], H * 0.5);
+  g.addColorStop(0, hsla(hue, S, 55, 0.22 * glow));
+  g.addColorStop(1, hsla(hue, S, 30, 0));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.globalCompositeOperation = "source-over";
+  for (const tr of scene.trails) {
+    const c = tr.host.center;
+    for (const sq of tr.squares) {
+      const idx = Math.min(c.length - 2, Math.floor(sq.t * (c.length - 1)));
+      const a = c[idx], b = c[idx + 1];
+      const m = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+      const x = a[0] - ((b[1] - a[1]) / m) * sq.off, y = a[1] + ((b[0] - a[0]) / m) * sq.off;
+      ctx.fillStyle = sq.tone < 0.4 ? hsla(hue, S, 55) : sq.tone < 0.7 ? "#f4f4f4" : sq.tone < 0.85 ? hsla(hue, S, 75) : "#000";
+      ctx.fillRect(x - sq.size / 2, y - sq.size / 2, sq.size, sq.size);
+    }
+  }
+
+  if (glow > 0) bloom(ctx, glow);
+
+  // Vignette.
+  g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.hypot(W, H) * 0.6);
+  g.addColorStop(0, "rgba(0,0,0,0)");
+  g.addColorStop(1, "rgba(0,0,0,0.55)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+
+  // Grain is drawn in device pixels so it stays fine at any output size.
+  if (p.grain > 0) {
+    const tile = document.createElement("canvas");
+    tile.width = tile.height = 256;
+    const tctx = tile.getContext("2d");
+    const img = tctx.createImageData(256, 256);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = scene.rnd() * 255;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+      img.data[i + 3] = 255;
+    }
+    tctx.putImageData(img, 0, 0);
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalCompositeOperation = "overlay";
+    ctx.globalAlpha = (p.grain / 100) * 0.35;
+    ctx.fillStyle = ctx.createPattern(tile, "repeat");
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.restore();
+  }
+}
+
+// ---------- preview ----------
+
+const preview = $("preview"), stage = $("stage");
+let queued = false;
+
+function drawPreview() {
+  queued = false;
+  const p = readSettings();
+  const { W, H, screens } = layout(p);
+  const box = stage.parentElement.getBoundingClientRect();
+  const fit = Math.min((box.width - 48) / W, (box.height - 48) / H);
+  const cssW = W * fit, cssH = H * fit, dpr = window.devicePixelRatio || 1;
+  preview.width = Math.round(cssW * dpr);
+  preview.height = Math.round(cssH * dpr);
+  stage.style.width = cssW + "px";
+  const ctx = preview.getContext("2d");
+  const px = fit * dpr;
+  ctx.setTransform(px, 0, 0, px, 0, 0);
+  render(ctx, p, W, H, px);
+
+  stage.querySelectorAll(".bezel").forEach((el) => el.remove());
+  const bw = Math.max(2, p.gap * fit) + "px";
+  for (let c = 1; c < p.cols; c++) {
+    const el = document.createElement("div");
+    el.className = "bezel";
+    el.style.left = (c * (p.w + p.gap) - p.gap) * fit + "px";
+    el.style.width = bw;
+    stage.appendChild(el);
+  }
+  for (let r = 1; r < p.rows; r++) {
+    const el = document.createElement("div");
+    el.className = "bezel bezel--h";
+    el.style.top = (r * (p.h + p.gap) - p.gap) * fit + "px";
+    el.style.height = bw;
+    stage.appendChild(el);
+  }
+
+  const n = screens.length, mp = ((p.w * p.h * n) / 1e6).toFixed(1);
+  $("exportInfo").textContent = `${p.cols}×${p.rows} grid of ${p.w}×${p.h} · span ${p.w * p.cols}×${p.h * p.rows} (${mp} MP)`;
+  for (const id of ctrlIds) {
+    const out = $(id).parentElement.querySelector("output");
+    if (out) out.textContent = $(id).value;
+  }
+  document.documentElement.style.setProperty("--accent", p.accent);
+  history.replaceState(null, "", "#" + new URLSearchParams(Object.entries(p)).toString());
+}
+
+function schedule() { if (!queued) { queued = true; requestAnimationFrame(drawPreview); } }
+
+// ---------- export ----------
+
+function renderFull(p) {
+  const { W, H, screens } = layout(p);
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  render(c.getContext("2d"), p, W, H, 1);
+  return { c, screens };
+}
+
+function download(canvas, name) {
+  return new Promise((done) => canvas.toBlob((blob) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); done(); }, 500);
+  }, "image/png"));
+}
+
+function crop(src, s) {
+  const c = document.createElement("canvas");
+  c.width = s.w; c.height = s.h;
+  c.getContext("2d").drawImage(src, s.x, s.y, s.w, s.h, 0, 0, s.w, s.h);
+  return c;
+}
+
+async function exportPNG(each) {
+  const p = readSettings();
+  const btns = [$("exportSpan"), $("exportEach")];
+  btns.forEach((b) => (b.disabled = true));
+  $("exportInfo").textContent = "Rendering…";
+  await new Promise((r) => setTimeout(r, 30));
+  try {
+    const { c, screens } = renderFull(p);
+    const base = `studio-${p.seed}-${p.w}x${p.h}`;
+    if (each || screens.length === 1) {
+      for (const s of screens) await download(crop(c, s), screens.length > 1 ? `${base}-r${s.row + 1}c${s.col + 1}.png` : `${base}.png`);
+    } else {
+      // Span file for OS "span" mode: screens butted together, bezel strips cut out.
+      const span = document.createElement("canvas");
+      span.width = p.w * p.cols; span.height = p.h * p.rows;
+      const sctx = span.getContext("2d");
+      for (const s of screens) sctx.drawImage(c, s.x, s.y, s.w, s.h, s.col * p.w, s.row * p.h, s.w, s.h);
+      await download(span, `${base}-${p.cols}x${p.rows}.png`);
+    }
+  } finally {
+    btns.forEach((b) => (b.disabled = false));
+    schedule();
+  }
+}
+
+// ---------- wiring ----------
+
+function newSeed() { $("seed").value = Math.floor(Math.random() * 1e9); schedule(); }
+
+function shuffle() {
+  for (const id of ["busy", "fill", "spread", "curl", "glow", "bits", "whites", "bgGlow"]) $(id).value = Math.round(Math.random() * 100);
+  $("angle").value = Math.round(Math.random() * 90 - 45);
+  newSeed();
+}
+
+PALETTES.forEach((hex) => {
+  const b = document.createElement("button");
+  b.className = "swatch"; b.style.background = hex; b.title = hex; b.setAttribute("aria-label", "Accent " + hex);
+  b.onclick = () => { $("accent").value = hex; schedule(); };
+  $("swatches").appendChild(b);
+});
+
+const params = new URLSearchParams(location.hash.slice(1));
+for (const [k, v] of params) {
+  if (k === "res") $("res").value = v;
+  else if (k === "w" || k === "h" || ctrlIds.includes(k)) $(k).value = v;
+}
+if (!params.has("seed")) $("seed").value = Math.floor(Math.random() * 1e9);
+$("customRes").hidden = $("res").value !== "custom";
+
+document.querySelectorAll("input, select").forEach((el) => el.addEventListener("input", () => {
+  $("customRes").hidden = $("res").value !== "custom";
+  schedule();
+}));
+$("reseed").onclick = newSeed;
+$("shuffle").onclick = shuffle;
+$("exportSpan").onclick = () => exportPNG(false);
+$("exportEach").onclick = () => exportPNG(true);
+addEventListener("resize", schedule);
+addEventListener("keydown", (e) => {
+  if (e.target.matches("input[type=number], select")) return;
+  if (e.code === "Space") { e.preventDefault(); newSeed(); }
+  if (e.key === "s" || e.key === "S") shuffle();
+});
+drawPreview();
+</script>
+</body>
+</html>
