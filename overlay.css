@@ -1,0 +1,33 @@
+#overlayPanel .ov__edit {
+  display: block;
+  width: 100%;
+  background: #1b1f1b;
+  border: 1px solid var(--line);
+  touch-action: none;
+  margin: 0 0 6px;
+}
+#overlayPanel .ov__layer { border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 10px; }
+#overlayPanel .ov__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  grid-template-columns: none;
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+#overlayPanel .ov__toggle input { accent-color: var(--accent); margin: 0; }
+#overlayPanel .ov__colour { display: flex; align-items: center; gap: 8px; }
+#overlayPanel .ov__colour input[type=color] { width: 44px; flex: none; }
+#overlayPanel .ov__colour .ov__toggle { margin: 0; font-weight: 400; font-size: 12px; }
+#overlayPanel input[type=text] {
+  width: 100%;
+  background: #0b0d0b;
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 4px 6px;
+  font: inherit;
+}
+#overlayPanel .ov__file { flex: 1 1 100%; min-width: 0; font-size: 12px; color: var(--muted); }
+#overlayPanel .ov__name { word-break: break-all; }
+#overlayPanel :disabled { opacity: 0.5; }
+#overlayPanel .ov__row { display: grid; grid-template-columns: 90px 1fr; align-items: center; gap: 8px; margin: 0 0 8px; }
