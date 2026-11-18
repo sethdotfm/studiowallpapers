@@ -13,7 +13,7 @@
     --text: #e6ebe6;
     --muted: #8a948a;
     --accent: #7fd321;
-    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+    font: 13px/1.4 "Segoe UI", system-ui, -apple-system, sans-serif;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
@@ -76,25 +76,25 @@
 
   <fieldset>
     <legend>Colour</legend>
-    <label class="wide">Accent <input type="color" id="accent" value="#7fd321"></label>
+    <label class="wide">Accent <input type="color" id="accent" value="#107c10"></label>
     <div class="row" id="swatches"></div>
-    <label>Background <input type="range" id="bgGlow" min="0" max="100" value="35"><output></output></label>
+    <label>Background <input type="range" id="bgGlow" min="0" max="100" value="95"><output></output></label>
     <label>Edge hue <input type="range" id="shift" min="-90" max="90" value="30"><output></output></label>
-    <label>Whites <input type="range" id="whites" min="0" max="100" value="30"><output></output></label>
+    <label>Whites <input type="range" id="whites" min="0" max="100" value="85"><output></output></label>
   </fieldset>
 
   <fieldset>
     <legend>Shape</legend>
-    <label>Busyness <input type="range" id="busy" min="0" max="100" value="45"><output></output></label>
-    <label>Fill <input type="range" id="fill" min="0" max="100" value="60"><output></output></label>
-    <label>Angle <input type="range" id="angle" min="-60" max="60" value="22"><output></output></label>
+    <label>Busyness <input type="range" id="busy" min="0" max="100" value="10"><output></output></label>
+    <label>Fill <input type="range" id="fill" min="0" max="100" value="67"><output></output></label>
+    <label>Angle <input type="range" id="angle" min="-60" max="60" value="35"><output></output></label>
     <label>Spread <input type="range" id="spread" min="0" max="100" value="50"><output></output></label>
-    <label>Curl <input type="range" id="curl" min="0" max="100" value="25"><output></output></label>
-    <label>Chaos <input type="range" id="chaos" min="0" max="100" value="15"><output></output></label>
-    <label>Twist <input type="range" id="twist" min="0" max="100" value="35"><output></output></label>
-    <label>Bloom <input type="range" id="glow" min="0" max="100" value="18"><output></output></label>
-    <label>Pixel bits <input type="range" id="bits" min="0" max="100" value="0"><output></output></label>
-    <label>Grain <input type="range" id="grain" min="0" max="100" value="8"><output></output></label>
+    <label>Curl <input type="range" id="curl" min="0" max="100" value="55"><output></output></label>
+    <label>Chaos <input type="range" id="chaos" min="0" max="100" value="70"><output></output></label>
+    <label>Twist <input type="range" id="twist" min="0" max="100" value="25"><output></output></label>
+    <label>Bloom <input type="range" id="glow" min="0" max="100" value="22"><output></output></label>
+    <label>Pixel bits <input type="range" id="bits" min="0" max="100" value="25"><output></output></label>
+    <label>Grain <input type="range" id="grain" min="0" max="100" value="0"><output></output></label>
   </fieldset>
 
   <fieldset>
@@ -182,7 +182,10 @@ function layout(p) {
 // Everything is laid out in virtual-canvas units (the full span incl. bezels), with sizes relative to H,
 // so a preview and a full-size export of the same settings draw the same picture.
 
-function buildScene(p, W, H) {
+// |x| with the corner at 0 rounded off; true |x| puts a visible kink in the ribbon edge.
+const sabs = (x, k = 0.25) => (Math.sqrt(x * x + k * k) - k) / (Math.sqrt(1 + k * k) - k);
+
+function buildScene(p, W, H, px) {
   const rnd = mulberry32(p.seed);
   const r = (a = 0, b = 1) => lerp(a, b, rnd());
   const gauss = () => (rnd() + rnd() + rnd() - 1.5) / 1.5;
@@ -212,7 +215,7 @@ function buildScene(p, W, H) {
     const offF = (fan * 0.16 * fanW + jit() * 0.08) * H;
     const offL = (sideBias[0] + fan * fanW + jit() * 0.5) * H;
     const offR = (sideBias[1] + cross * fan * fanW + jit() * 0.5) * H;
-    const k = kShared + jit() * 0.6;
+    const k = Math.max(1.6, kShared + jit() * 0.6); // below ~1.5 |t|^k has a visible corner at the crossing
     const bow = (bowDir * 0.8 + jit() * 0.5) * H * lerp(0.02, 0.4, curl);
     const curlAmp = curl * chaos * H * r(-0.3, 0.3);
     const curlFreq = r(0.6, 1.6), curlPh = r(0, Math.PI * 2);
@@ -225,8 +228,10 @@ function buildScene(p, W, H) {
     // Twist turns the ribbon about its spine; |cos| is the visible width, the sign picks front or back face.
     const tw = { freq: lerp(0, 1.1, twist) * r(0.6, 1.2), ph: r(0, Math.PI * 2) };
 
-    const N = 220;
-    const center = [], width = [], phase = [];
+    // Slices about 3 device px long; coarser ones show as facets and corners in the rims.
+    const N = Math.round(clamp((2 * L * px) / 3, 200, 4000));
+    const center = [], width = [], phase = [], edgeF = [];
+    const refl = { freq: r(0.8, 2.4), ph: r(0, Math.PI * 2) };
     for (let j = 0; j <= N; j++) {
       const t = (j / N) * 2 - 1;
       const side = t < 0 ? offL : offR;
@@ -236,11 +241,17 @@ function buildScene(p, W, H) {
       const u = grow > 0 ? (t + 1) / 2 : (1 - t) / 2;
       const ph = Math.PI * tw.freq * t + tw.ph;
       phase.push(ph);
-      width.push(wmax * (0.35 + 0.65 * Math.pow(u, ge)) * (pinch + (1 - pinch) * Math.pow(Math.abs(t), 0.7)) * (0.4 + 0.6 * Math.abs(Math.cos(ph))));
+      // Seen at angle ph, a strip of face width wf and thickness T spans wf|cos| + T|sin|; the T part is
+      // its side wall, drawn as a lit edge so a twist reads as a turn and not a pinch.
+      const wf = wmax * (0.35 + 0.65 * Math.pow(u, ge)) * (pinch + (1 - pinch) * Math.pow(t * t + 0.004, 0.35));
+      const sn = Math.sin(ph), T = wf * 0.18, wall = T * Math.sign(sn) * sabs(sn);
+      const vis = wf * sabs(Math.cos(ph)) + Math.abs(wall);
+      width.push(vis);
+      edgeF.push(wall / vis);
     }
 
     ribbons.push({
-      center, width, phase, wide,
+      center, width, phase, edgeF, refl, wide,
       white: rnd() < whites * 0.3,
       fadeA: r(0, 0.4), fadeB: r(0, 0.4),
       layer: r(0, 1),
@@ -249,11 +260,11 @@ function buildScene(p, W, H) {
   ribbons.sort((a, b) => a.layer - b.layer);
 
   const trails = [];
-  const trailCount = Math.round((p.bits / 100) * 5);
+  const trailCount = Math.round(Math.pow(p.bits / 100, 1.4) * 60);
   for (let i = 0; i < trailCount && ribbons.length; i++) {
     const host = ribbons[Math.floor(rnd() * ribbons.length)];
     const start = r(0.05, 0.85), len = r(0.06, 0.16), side = rnd() < 0.5 ? 1 : -1;
-    const n = Math.round(r(10, 24)), size0 = H * r(0.006, 0.012);
+    const n = Math.round(r(8, 30)), size0 = H * r(0.004, 0.011);
     const squares = [];
     for (let s = 0; s < n; s++) {
       if (rnd() < 0.15) continue;
@@ -316,23 +327,37 @@ function drawGlass(lctx, rb, o, pal, fill) {
   for (let j = 0; j < n; j++) {
     const e = envelope(rb, j / n);
     if (e < 0.01) continue;
-    const ph = rb.phase[j], c = Math.cos(ph), front = c >= 0;
+    const ph = rb.phase[j], front = Math.cos(ph) >= 0;
     // Back faces are darker and swap which wall catches the light.
     const lit = front ? 1 : 0.7;
     const [a, b] = front ? [top[j], bot[j]] : [bot[j], top[j]];
-    const hl = 0.5 + 0.3 * Math.sin(ph);
-    const g = lctx.createLinearGradient(a[0], a[1], b[0], b[1]);
     const ea = e * body;
-    g.addColorStop(0, pal.rimHot(e * lit));
-    g.addColorStop(0.012, pal.rim(0.95 * e * lit));
-    g.addColorStop(0.05, pal.rim(0.7 * e * lit));
-    g.addColorStop(0.11, pal.core(0.9 * ea, 0.75));
-    g.addColorStop(Math.max(0.14, hl - 0.16), pal.core(0.85 * ea, 1));
-    g.addColorStop(hl, pal.sheen(0.85 * ea * lit));
-    g.addColorStop(Math.min(0.86, hl + 0.2), pal.core(0.85 * ea, 0.9));
-    g.addColorStop(0.9, pal.core(0.9 * ea, 1.3));
-    g.addColorStop(0.96, pal.refract(0.85 * e * lit));
-    g.addColorStop(1, pal.refractHot(e * lit));
+    // Soft patches along the length where the face mirrors a bright studio light.
+    const mirror = Math.pow(Math.max(0, Math.sin(Math.PI * 2 * rb.refl.freq * (j / n) + rb.refl.ph)), 6) * lit * e;
+    // Each band keeps to its own lane: when two stops pass each other the gradient reorders and
+    // the colour jumps, which shows as a hard seam across the ribbon.
+    const hl = 0.62 + 0.18 * Math.sin(ph);
+    const hl2 = 0.22 + 0.05 * Math.sin(ph * 1.7);
+    const face = [
+      [0, pal.rimHot(e * lit)], [0.012, pal.rim(0.95 * e * lit)], [0.05, pal.rim(0.7 * e * lit)],
+      [0.1, pal.core(0.9 * ea, 0.75)],
+      [hl2 - 0.06, pal.core(0.85 * ea, 1)], [hl2, pal.refl(0.15 + 0.75 * mirror)], [hl2 + 0.07, pal.core(0.85 * ea, 1)],
+      [Math.max(hl2 + 0.1, hl - 0.16), pal.core(0.85 * ea, 1)], [hl, pal.sheen((0.7 + 0.3 * mirror) * ea * lit)],
+      [Math.min(0.86, hl + 0.2), pal.core(0.85 * ea, 0.9)],
+      [0.9, pal.core(0.9 * ea, 1.3)], [0.96, pal.refract(0.85 * e * lit)], [1, pal.refractHot(e * lit)],
+    ];
+    // Side wall takes fraction |f| of the visible width, at the a end for f > 0.
+    const f = rb.edgeF[j] * (front ? 1 : -1), af = Math.min(1, Math.abs(f));
+    const g = lctx.createLinearGradient(a[0], a[1], b[0], b[1]);
+    const map = f > 0 ? (u) => af + u * (1 - af) : (u) => u * (1 - af);
+    const addFace = () => { for (const [u, c] of face) g.addColorStop(clamp(map(u), 0, 1), c); };
+    // Stops at equal offsets keep insertion order, so add whichever part comes first across the ribbon first.
+    if (f <= 0) addFace();
+    if (af > 0.01) {
+      const wall = [[0, pal.rimHot(e)], [0.5, pal.wall(0.9 * e)], [1, pal.rimHot(0.85 * e)]];
+      for (const [u, c] of wall) g.addColorStop(f > 0 ? u * af : 1 - u * af, c); // u = 0 is the outer edge
+    }
+    if (f > 0) addFace();
     lctx.fillStyle = g;
     lctx.beginPath();
     lctx.moveTo(top[j][0], top[j][1]); lctx.lineTo(top[j + 1][0], top[j + 1][1]);
@@ -366,6 +391,7 @@ function palette(p, rb) {
       core: (a, k) => hsla(hue, 8, 10 * k, a), sheen: (a) => hsla(hue, 10, 42, a),
       refract: (a) => hsla(h2, S * 0.6, 55, a), refractHot: (a) => hsla(h2, S * 0.5, 75, a),
       spec: (a) => `rgba(255,255,255,${a.toFixed(3)})`,
+      refl: (a) => `rgba(245,248,250,${a.toFixed(3)})`, wall: (a) => hsla(hue, 10, 70, a),
     };
   }
   return {
@@ -373,6 +399,7 @@ function palette(p, rb) {
     core: (a, k) => hsla(hue, S, 12 * k, a), sheen: (a) => hsla(hue, S, 40, a),
     refract: (a) => hsla(h2, S, 48, a), refractHot: (a) => hsla(h2, S, 70, a),
     spec: (a) => `rgba(255,255,248,${a.toFixed(3)})`,
+    refl: (a) => hsla(hue, S * 0.3, 92, a), wall: (a) => hsla(hue, S, 45, a),
   };
 }
 
@@ -380,7 +407,7 @@ function palette(p, rb) {
 function render(ctx, p, W, H, px) {
   const [hue, S] = hexToHsl(p.accent);
   const glow = p.glow / 100, fill = p.fill / 100;
-  const scene = buildScene(p, W, H);
+  const scene = buildScene(p, W, H, px);
   const { focal } = scene;
 
   ctx.save();
