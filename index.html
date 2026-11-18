@@ -86,12 +86,12 @@
   <fieldset>
     <legend>Shape</legend>
     <label>Busyness <input type="range" id="busy" min="0" max="100" value="45"><output></output></label>
-    <label>Fill <input type="range" id="fill" min="0" max="100" value="80"><output></output></label>
+    <label>Fill <input type="range" id="fill" min="0" max="100" value="60"><output></output></label>
     <label>Angle <input type="range" id="angle" min="-60" max="60" value="22"><output></output></label>
     <label>Spread <input type="range" id="spread" min="0" max="100" value="50"><output></output></label>
     <label>Curl <input type="range" id="curl" min="0" max="100" value="25"><output></output></label>
     <label>Chaos <input type="range" id="chaos" min="0" max="100" value="15"><output></output></label>
-    <label>Twist <input type="range" id="twist" min="0" max="100" value="55"><output></output></label>
+    <label>Twist <input type="range" id="twist" min="0" max="100" value="35"><output></output></label>
     <label>Bloom <input type="range" id="glow" min="0" max="100" value="18"><output></output></label>
     <label>Pixel bits <input type="range" id="bits" min="0" max="100" value="0"><output></output></label>
     <label>Grain <input type="range" id="grain" min="0" max="100" value="8"><output></output></label>
@@ -197,7 +197,7 @@ function buildScene(p, W, H) {
   const focal = [W * r(0.4, 0.6), H * r(0.45, 0.6)];
   const L = Math.hypot(W, H) * 0.75;
 
-  const count = Math.round(lerp(2, 7, busy) * Math.sqrt(aspect));
+  const count = Math.round(lerp(3, 10, busy) * Math.sqrt(aspect));
   // Shared shape values keep neighbours parallel; Chaos adds per-ribbon jitter on top.
   const sideBias = [r(-0.5, 0.5), r(-0.5, 0.5)];
   const cross = rnd() < 0.65 ? -1 : 1; // -1 flips the fan through the focal point, so the ribbons cross there
@@ -218,12 +218,12 @@ function buildScene(p, W, H) {
     const curlFreq = r(0.6, 1.6), curlPh = r(0, Math.PI * 2);
 
     const wide = rnd() < 0.3;
-    const wmax = H * (wide ? r(0.28, 0.48) : r(0.13, 0.26));
+    const wmax = H * (wide ? r(0.22, 0.4) : r(0.08, 0.18));
     const grow = rnd() < 0.5 ? 1 : -1;
     const ge = r(0.5, 1.4);
     const pinch = r(0.45, 0.8);
     // Twist turns the ribbon about its spine; |cos| is the visible width, the sign picks front or back face.
-    const tw = { freq: lerp(0, 1.5, twist) * r(0.6, 1.3), ph: r(0, Math.PI * 2) };
+    const tw = { freq: lerp(0, 1.1, twist) * r(0.6, 1.2), ph: r(0, Math.PI * 2) };
 
     const N = 220;
     const center = [], width = [], phase = [];
@@ -236,7 +236,7 @@ function buildScene(p, W, H) {
       const u = grow > 0 ? (t + 1) / 2 : (1 - t) / 2;
       const ph = Math.PI * tw.freq * t + tw.ph;
       phase.push(ph);
-      width.push(wmax * (0.2 + 0.8 * Math.pow(u, ge)) * (pinch + (1 - pinch) * Math.pow(Math.abs(t), 0.7)) * (0.16 + 0.84 * Math.abs(Math.cos(ph))));
+      width.push(wmax * (0.35 + 0.65 * Math.pow(u, ge)) * (pinch + (1 - pinch) * Math.pow(Math.abs(t), 0.7)) * (0.4 + 0.6 * Math.abs(Math.cos(ph))));
     }
 
     ribbons.push({
@@ -312,13 +312,13 @@ function bloom(ctx, amount) {
 // full coverage and leave no seams; the finished layer is then laid over the scene opaquely.
 function drawGlass(lctx, rb, o, pal, fill) {
   const { top, bot } = o, n = top.length - 1;
-  const body = lerp(0.55, 1, fill) * (rb.wide ? 0.85 : 1);
+  const body = lerp(0.35, 0.9, fill) * (rb.wide ? 0.75 : 1);
   for (let j = 0; j < n; j++) {
     const e = envelope(rb, j / n);
     if (e < 0.01) continue;
     const ph = rb.phase[j], c = Math.cos(ph), front = c >= 0;
     // Back faces are darker and swap which wall catches the light.
-    const lit = front ? 1 : 0.55;
+    const lit = front ? 1 : 0.7;
     const [a, b] = front ? [top[j], bot[j]] : [bot[j], top[j]];
     const hl = 0.5 + 0.3 * Math.sin(ph);
     const g = lctx.createLinearGradient(a[0], a[1], b[0], b[1]);
