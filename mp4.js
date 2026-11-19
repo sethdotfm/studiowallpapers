@@ -31,6 +31,9 @@
     return null;
   }
 
+  // Yields to the page without setTimeout, which browsers clamp to 4 ms or more (1 s in background tabs).
+  const port = (() => { const ch = new MessageChannel(), q = []; ch.port1.onmessage = () => q.shift()(); return { next: () => new Promise((r) => { q.push(r); ch.port2.postMessage(0); }) }; })();
+
   // renderFrame(i) returns a canvas holding frame i. Resolves to an MP4 Blob.
   async function encode({ config, fps, frames, renderFrame, onProgress, signal }) {
     const chunks = [];
@@ -49,6 +52,9 @@
     });
     enc.configure(config);
     const us = 1e6 / fps, gop = Math.max(1, Math.round(fps * 2));
+    // A deeper queue keeps the encoder busy (it, not rendering, is the bottleneck); cap it by frame size
+    // since each queued frame holds a full-resolution GPU image. About 28 at 1080p, 7 at 4K.
+    const maxQueue = Math.max(4, Math.min(32, Math.round(6e7 / (config.width * config.height))));
     try {
       for (let i = 0; i < frames; i++) {
         if (failure) throw failure;
@@ -57,8 +63,9 @@
         const vf = new VideoFrame(canvas, { timestamp: Math.round(i * us), duration: Math.round(us) });
         enc.encode(vf, { keyFrame: i % gop === 0 });
         vf.close();
-        while (enc.encodeQueueSize > 6) await new Promise((r) => setTimeout(r, 0));
-        if (onProgress && (i % 4 === 0 || i === frames - 1)) { onProgress((i + 1) / frames); await new Promise((r) => setTimeout(r, 0)); }
+        // Keep the encoder fed but bounded; wake when it finishes a frame rather than polling.
+        while (enc.encodeQueueSize > maxQueue && !failure) await new Promise((r) => enc.addEventListener("dequeue", r, { once: true }));
+        if (onProgress && (i % 15 === 0 || i === frames - 1)) { onProgress((i + 1) / frames); await port.next(); }
       }
       await enc.flush();
     } finally {

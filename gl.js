@@ -147,9 +147,9 @@ vec4 bicubic(sampler2D t, vec2 uv) {
 }`;
 
   const FS_FINAL = HEAD + WALLPOS + BICUBIC + `
-uniform sampler2D uScene, uBloom;
-uniform vec2 uWall;
-uniform float uBloomK, uGrain, uHasBloom;
+uniform sampler2D uScene, uBloom, uOverlay;
+uniform vec2 uWall, uOut;
+uniform float uBloomK, uGrain, uHasBloom, uHasOverlay;
 in vec2 vT;
 out vec4 o;
 float hash(vec2 p) { p = fract(p * vec2(443.897, 441.423)); p += dot(p, p.yx + 19.19); return fract((p.x + p.y) * p.x); }
@@ -170,6 +170,8 @@ void main() {
   }
   // Static dither: dark green gradients band badly in 8-bit output and in video.
   c += (hash(gl_FragCoord.xy + 17.0) - 0.5) / 255.0;
+  // Labels: premultiplied, uploaded flipped so gl_FragCoord / uOut addresses it directly.
+  if (uHasOverlay > 0.5) { vec4 l = texture(uOverlay, gl_FragCoord.xy / uOut); c = c * (1.0 - l.a) + l.rgb; }
   o = vec4(c, 1.0);
 }`;
 
@@ -339,12 +341,16 @@ void main() {
     // onto the next larger at 0.8, screened over the frame at amount * 0.45.
     function bloom(frame, wallPx) {
       const W = frame.W, H = frame.H;
-      const baseW = Math.max(1, Math.ceil((W * wallPx) / 8)), baseH = Math.max(1, Math.ceil((H * wallPx) / 8));
-      let mul = 4;
+      // The base level is 1/8 of the wall, capped: on a wide wall exported one screen at a time, a true
+      // 1/8 wall costs more than the screen itself, and past ~1.5k px the blur looks the same.
+      let s8 = wallPx / 8;
+      s8 = Math.min(s8, 1536 / W, 1536 / H);
+      const baseW = Math.max(1, Math.ceil(W * s8)), baseH = Math.max(1, Math.ceil(H * s8));
+      let mul = 2;
       while (mul > 1 && (baseW * mul > maxRB || baseH * mul > maxRB)) mul /= 2;
       const src = target("bloomSrc", baseW * mul, baseH * mul, false);
       gl.bindFramebuffer(gl.FRAMEBUFFER, src.f);
-      drawScene(frame, [0, 0, W, H], src.w, src.h, (wallPx * mul) / 8);
+      drawScene(frame, [0, 0, W, H], src.w, src.h, s8 * mul);
       let n = 1, w = baseW, h = baseH;
       while (n < 7 && w >= 4 && h >= 4) { n++; w = Math.ceil(w / 2); h = Math.ceil(h / 2); }
       const lv = levels(baseW, baseH, n);
@@ -367,40 +373,60 @@ void main() {
       return lv[0];
     }
 
-    // view: [x, y, w, h] in wall px. wallPx: device px per wall px for the bloom and hairlines.
-    function render(frame, view, outW, outH) {
+    // Labels and images from the 2D overlay, as a texture laid over the output. Static per output, so
+    // upload once and reuse every frame; reading the GL canvas back into 2D each frame is what was slow.
+    function overlay(src) {
+      const t = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+      for (const k of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, k, gl.LINEAR);
+      for (const k of [gl.TEXTURE_WRAP_S, gl.TEXTURE_WRAP_T]) gl.texParameteri(gl.TEXTURE_2D, k, gl.CLAMP_TO_EDGE);
+      return { t, free: () => gl.deleteTexture(t) };
+    }
+
+    // tiles: [{ view: [x, y, w, h] in wall px, dx, dy, w, h } in output px, top-left origin].
+    // Several tiles make a span with the bezels cut out; the wall-wide bloom is computed once for all.
+    function render(frame, tiles, outW, outH, ov) {
       if (lost) return false;
       outW = Math.max(1, Math.min(outW | 0, maxRB)); outH = Math.max(1, Math.min(outH | 0, maxRB));
       if (canvas.width !== outW || canvas.height !== outH) { canvas.width = outW; canvas.height = outH; }
-      const pxDev = outW / view[2];
-      const sc = target("scene", outW, outH, true);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, sc.ms ? sc.ms.f : sc.f);
-      drawScene(frame, view, outW, outH, pxDev);
-      if (sc.ms) {
-        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, sc.ms.f);
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, sc.f);
-        gl.blitFramebuffer(0, 0, outW, outH, 0, 0, outW, outH, gl.COLOR_BUFFER_BIT, gl.NEAREST);
-      }
+      const pxDev = tiles[0].w / tiles[0].view[2];
       const b = frame.glow > 0 ? bloom(frame, pxDev) : null;
-
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      gl.viewport(0, 0, outW, outH);
-      gl.useProgram(P.final.p);
-      const u = P.final.u;
-      gl.uniform4fv(u.uView, view);
-      gl.uniform2f(u.uWall, frame.W, frame.H);
-      gl.uniform1f(u.uBloomK, Math.min(1, frame.glow * 0.45));
-      gl.uniform1f(u.uHasBloom, b ? 1 : 0);
-      gl.uniform1f(u.uGrain, frame.grain * 0.35);
-      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sc.t); gl.uniform1i(u.uScene, 0);
-      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, b ? b.t : sc.t); gl.uniform1i(u.uBloom, 1);
-      gl.bindVertexArray(vaos.empty);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      gl.activeTexture(gl.TEXTURE0);
+      for (const tl of tiles) {
+        const sc = target("scene", tl.w, tl.h, true);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, sc.ms ? sc.ms.f : sc.f);
+        drawScene(frame, tl.view, tl.w, tl.h, tl.w / tl.view[2]);
+        if (sc.ms) {
+          gl.bindFramebuffer(gl.READ_FRAMEBUFFER, sc.ms.f);
+          gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, sc.f);
+          gl.blitFramebuffer(0, 0, tl.w, tl.h, 0, 0, tl.w, tl.h, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+        }
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(tl.dx, outH - tl.dy - tl.h, tl.w, tl.h);
+        gl.useProgram(P.final.p);
+        const u = P.final.u;
+        gl.uniform4fv(u.uView, tl.view);
+        gl.uniform2f(u.uWall, frame.W, frame.H);
+        gl.uniform2f(u.uOut, outW, outH);
+        gl.uniform1f(u.uBloomK, Math.min(1, frame.glow * 0.45));
+        gl.uniform1f(u.uHasBloom, b ? 1 : 0);
+        gl.uniform1f(u.uHasOverlay, ov ? 1 : 0);
+        gl.uniform1f(u.uGrain, frame.grain * 0.35);
+        gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sc.t); gl.uniform1i(u.uScene, 0);
+        gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, b ? b.t : sc.t); gl.uniform1i(u.uBloom, 1);
+        gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, ov ? ov.t : sc.t); gl.uniform1i(u.uOverlay, 2);
+        gl.bindVertexArray(vaos.empty);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.activeTexture(gl.TEXTURE0);
+      }
       return true;
     }
 
-    return { canvas, render, maxSize: maxRB, get lost() { return lost; } };
+    return { canvas, render, overlay, maxSize: maxRB, get lost() { return lost; } };
   }
 
   window.StudioGL = { create };

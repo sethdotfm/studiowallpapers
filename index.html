@@ -47,7 +47,8 @@
   .links a { color: var(--text); font-size: 12px; }
   main { position: relative; display: grid; place-items: center; padding: 24px; overflow: hidden; }
   #stage { position: relative; max-width: 100%; max-height: 100%; }
-  #preview { display: block; width: 100%; height: auto; }
+  #stage canvas { display: block; }
+  #labels { position: absolute; left: 0; top: 0; pointer-events: none; }
   .bezel { position: absolute; top: 0; bottom: 0; background: var(--bg); }
   .bezel--h { top: auto; bottom: auto; left: 0; right: 0; }
   .hint { position: absolute; left: 24px; bottom: 12px; color: var(--muted); font-size: 12px; }
@@ -57,7 +58,7 @@
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   body.kiosk { display: block; background: #000; cursor: none; overflow: hidden; }
   body.kiosk aside, body.kiosk main { display: none; }
-  #kioskCanvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  #kioskCanvas, #kioskLabels { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
   #kioskHint { position: fixed; left: 16px; bottom: 16px; color: #9aa59a; font-size: 12px; transition: opacity 1s; }
   @media (max-width: 760px) { body { grid-template-columns: 1fr; grid-template-rows: 45vh auto; } main { order: -1; } }
 </style>
@@ -122,7 +123,7 @@
       <span class="time" id="clock">0.0 / 20 s</span>
     </div>
     <label>Loop (s) <input type="range" id="loop" min="2" max="120" value="20"><output></output></label>
-    <label>Speed <input type="range" id="speed" min="1" max="6" value="1"><output></output></label>
+    <label>Speed <input type="range" id="speed" min="0.25" max="6" step="0.25" value="1"><output></output></label>
     <label class="wide">Swipe
       <select id="swipe">
         <option value="off">Off</option>
@@ -137,10 +138,18 @@
     <label>Drift <input type="range" id="drift" min="0" max="100" value="30"><output></output></label>
     <label>Breathe <input type="range" id="breathe" min="0" max="100" value="15"><output></output></label>
     <label>Wander <input type="range" id="wander" min="0" max="100" value="15"><output></output></label>
-    <label>Roll <input type="range" id="roll" min="-4" max="4" value="1"><output></output></label>
-    <label>Sheen <input type="range" id="sheen" min="-4" max="4" value="1"><output></output></label>
-    <label>Bits flow <input type="range" id="bitsFlow" min="-4" max="4" value="1"><output></output></label>
-    <p class="note">Everything repeats once per loop, so any length plays forever without a jump. Speed, Roll, Sheen and Bits flow are whole cycles per loop.</p>
+    <label>Roll <input type="range" id="roll" min="-4" max="4" step="0.25" value="1"><output></output></label>
+    <label>Shimmer <input type="range" id="sheen" min="0" max="6" step="0.25" value="1"><output></output></label>
+    <label class="wide">Shimmer dir
+      <select id="sheenDir">
+        <option value="ltr">Left to right</option>
+        <option value="rtl">Right to left</option>
+        <option value="swipe">Follow swipe</option>
+        <option value="random">Random</option>
+      </select>
+    </label>
+    <label>Bits flow <input type="range" id="bitsFlow" min="-4" max="4" step="0.25" value="1"><output></output></label>
+    <p class="note" id="loopNote">Speed, Roll, Shimmer and Bits flow are cycles per loop. Everything repeats exactly, so the loop plays forever without a jump.</p>
   </fieldset>
 
   <fieldset>
@@ -195,23 +204,23 @@
 </aside>
 
 <main>
-  <div id="stage"><canvas id="preview"></canvas></div>
+  <div id="stage"><canvas id="labels"></canvas></div>
   <div class="fps" id="fpsMeter" aria-live="off"></div>
   <div class="hint">Space: new seed · S: shuffle shape · M: shuffle motion · P: play/pause · the URL keeps your settings</div>
 </main>
 
-<script src="gl.js?v=2"></script>
-<script src="mp4.js?v=2"></script>
-<script src="overlay.js?v=3"></script>
+<script src="gl.js?v=3"></script>
+<script src="mp4.js?v=4"></script>
+<script src="overlay.js?v=4"></script>
 <script>
 "use strict";
 
 const PALETTES = ["#7fd321", "#107c10", "#3ad16b", "#c8ff3d", "#2fd6b0", "#e8e8e8", "#38a8ff", "#ff5a36"];
 const $ = (id) => document.getElementById(id);
 const SHAPE_IDS = ["cols", "rows", "gap", "accent", "bgGlow", "whites", "busy", "fill", "angle", "spread", "curl", "chaos", "twist", "shift", "glow", "bits", "grain", "seed"];
-const MOTION_IDS = ["loop", "speed", "swipe", "swipeLen", "flow", "drift", "breathe", "wander", "roll", "sheen", "bitsFlow", "fps", "vbr", "codec"];
+const MOTION_IDS = ["loop", "speed", "swipe", "swipeLen", "flow", "drift", "breathe", "wander", "roll", "sheen", "sheenDir", "bitsFlow", "fps", "vbr", "codec"];
 const ctrlIds = [...SHAPE_IDS, ...MOTION_IDS];
-const TEXT_IDS = new Set(["accent", "swipe", "codec"]);
+const TEXT_IDS = new Set(["accent", "swipe", "sheenDir", "codec"]);
 const TAU = Math.PI * 2;
 
 // ---------- helpers ----------
@@ -262,6 +271,11 @@ function readSettings() {
   const [rw, rh] = $("res").value === "custom" ? [+$("w").value, +$("h").value] : $("res").value.split("x").map(Number);
   const p = { w: clamp(rw || 1920, 320, 16384), h: clamp(rh || 1080, 320, 16384), res: $("res").value };
   for (const id of ctrlIds) p[id] = TEXT_IDS.has(id) ? $(id).value : +$(id).value;
+  // Quarter-cycle rates repeat after up to 4 loops; the real loop is the shortest length on which
+  // every motion completes whole cycles, so it still plays forever without a jump.
+  const rates = [p.speed, p.roll, p.sheen, p.bitsFlow];
+  p.mul = [1, 2, 3, 4].find((m) => rates.every((r) => Math.abs(r * m - Math.round(r * m)) < 1e-6)) || 4;
+  p.period = p.loop * p.mul;
   return p;
 }
 
@@ -302,7 +316,8 @@ function buildFrame(p, W, H, px, t) {
   const r = (a = 0, b = 1) => lerp(a, b, rnd());
   const gauss = () => (rnd() + rnd() + rnd() - 1.5) / 1.5;
   const busy = p.busy / 100, spread = p.spread / 100, curl = p.curl / 100, chaos = p.chaos / 100, whites = p.whites / 100, twist = p.twist / 100;
-  const tau = frac(t / p.loop), kb = p.speed;
+  // tau runs 0..mul over one real loop; every rate times mul is a whole number of cycles.
+  const tau = (((t % p.period) + p.period) % p.period) / p.loop, kb = p.speed;
   const drift = p.drift / 100, breathe = p.breathe / 100, flow = p.flow / 100, wander = p.wander / 100;
   const swLen = p.swipeLen / 100, swSoft = 0.12;
   const wave = (k, ph) => Math.sin(TAU * k * tau + ph);
@@ -352,7 +367,7 @@ function buildFrame(p, W, H, px, t) {
     // Motion. All periodic in tau with whole-number cycles, so t = loop lands exactly on t = 0.
     const mp = Array.from({ length: 8 }, () => mrnd() * TAU);
     const wm = 1 + Math.floor(mrnd() * 3), wk = lerp(1.5, 3.5, mrnd()), fk = lerp(1.2, 2.6, mrnd());
-    const swOff = mrnd(), coin = mrnd();
+    const swOff = mrnd(), coin = mrnd(), coin2 = mrnd();
     const dir = p.swipe === "rtl" ? -1 : p.swipe === "alt" ? (i % 2 ? -1 : 1) : p.swipe === "random" ? (coin < 0.5 ? -1 : 1) : 1;
     offL += drift * H * 0.12 * wave(kb, mp[0]);
     offR += drift * H * 0.12 * wave(kb, mp[1]);
@@ -360,7 +375,9 @@ function buildFrame(p, W, H, px, t) {
     bow *= 1 + drift * 0.35 * wave(kb, mp[3]);
     wmax *= 1 + breathe * 0.35 * wave(kb, mp[4]);
     const rollPh = TAU * p.roll * tau;
-    refl[1] += TAU * p.sheen * tau;
+    // Positive phase moves the reflection toward lower u, which is right to left on screen.
+    const sheenDir = p.sheenDir === "rtl" ? 1 : p.sheenDir === "swipe" ? -dir : p.sheenDir === "random" ? (coin2 < 0.5 ? 1 : -1) : -1;
+    refl[1] += TAU * p.sheen * tau * sheenDir;
     // Swipe window [head - len, head] travels along the ribbon; it wraps only while fully off the ribbon.
     const head = p.swipe === "off" ? 0 : -swSoft + (1 + swLen + 2 * swSoft) * frac(kb * tau + swOff);
 
@@ -459,23 +476,50 @@ function buildFrame(p, W, H, px, t) {
 const R = window.StudioGL && StudioGL.create();
 if (!R) document.body.insertAdjacentHTML("afterbegin", '<p style="position:fixed;top:8px;left:316px;color:#f88;z-index:9">WebGL 2 is not available in this browser, so nothing can render.</p>');
 
-// Draws one view of the wall into a 2D canvas, labels included. view: wall-pixel rect, out: 2D context.
-function renderView(p, lay, t, view, ctx2d) {
-  const ow = ctx2d.canvas.width, oh = ctx2d.canvas.height, px = ow / view[2];
-  const frame = buildFrame(p, lay.W, lay.H, px, t);
-  R.render(frame, view, ow, oh);
-  ctx2d.setTransform(1, 0, 0, 1, 0, 0);
-  ctx2d.drawImage(R.canvas, 0, 0, ow, oh);
-  ctx2d.setTransform(px, 0, 0, oh / view[3], -view[0] * px, -view[1] * (oh / view[3]));
-  window.StudioOverlay?.draw(ctx2d, lay.screens);
-  ctx2d.setTransform(1, 0, 0, 1, 0, 0);
+// The GL canvas is shown and encoded directly. Copying it into a 2D canvas every frame made the CPU wait
+// on the GPU each time (about 24 ms per 1080p frame), so labels go on a separate static layer instead.
+
+// One output tile per wall view: view is a wall-pixel rect, dx/dy/w/h place it in the output.
+const tile = (view, dx, dy, w, h) => ({ view, dx, dy, w, h });
+
+function renderTiles(p, lay, t, tiles, ow, oh, ov) {
+  const frame = buildFrame(p, lay.W, lay.H, tiles[0].w / tiles[0].view[2], t);
+  R.render(frame, tiles, ow, oh, ov);
+}
+
+// Labels for the given tiles, drawn once into a transparent canvas the size of the output.
+function drawLabels(ctx, lay, tiles) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  if (!window.StudioOverlay) return;
+  for (const tl of tiles) {
+    const kx = tl.w / tl.view[2], ky = tl.h / tl.view[3];
+    ctx.save();
+    ctx.beginPath(); ctx.rect(tl.dx, tl.dy, tl.w, tl.h); ctx.clip();
+    ctx.setTransform(kx, 0, 0, ky, tl.dx - tl.view[0] * kx, tl.dy - tl.view[1] * ky);
+    StudioOverlay.draw(ctx, lay.screens);
+    ctx.restore();
+  }
+}
+
+function labelTexture(lay, tiles, ow, oh) {
+  const st = window.StudioOverlay?.getState();
+  if (!st || !(st.text.on || st.image.on)) return null;
+  const c = document.createElement("canvas");
+  c.width = ow; c.height = oh;
+  drawLabels(c.getContext("2d"), lay, tiles);
+  return R.overlay(c);
 }
 
 // ---------- preview + playback ----------
 
-const preview = $("preview"), stage = $("stage"), pctx = preview.getContext("2d");
+const stage = $("stage"), labels = $("labels"), lctx = labels.getContext("2d");
+// Hidden copy of the preview for the label editor's screen 1 thumbnail. Refreshed only when settings
+// change, since each refresh is one of the slow GPU-to-2D copies.
+const thumb = document.createElement("canvas"), tctx = thumb.getContext("2d");
+if (R) { R.canvas.id = "preview"; stage.prepend(R.canvas); }
 const clock = { playing: true, t: 0, last: performance.now() };
-let queued = false, current = null, busyExporting = false;
+let queued = false, current = null, busyExporting = false, labelsDirty = true, thumbDirty = true;
 
 function layoutPreview() {
   const p = readSettings(), lay = layout(p);
@@ -483,7 +527,8 @@ function layoutPreview() {
   const fit = Math.max(0.001, Math.min((box.width - 48) / lay.W, (box.height - 48) / lay.H));
   const cssW = lay.W * fit, cssH = lay.H * fit, dpr = window.devicePixelRatio || 1;
   const pw = Math.max(1, Math.round(cssW * dpr)), ph = Math.max(1, Math.round(cssH * dpr));
-  if (preview.width !== pw || preview.height !== ph) { preview.width = pw; preview.height = ph; }
+  for (const c of [labels, thumb]) if (c.width !== pw || c.height !== ph) { c.width = pw; c.height = ph; }
+  for (const c of [labels, R && R.canvas]) if (c) { c.style.width = cssW + "px"; c.style.height = cssH + "px"; }
   stage.style.width = cssW + "px";
 
   stage.querySelectorAll(".bezel").forEach((el) => el.remove());
@@ -507,9 +552,13 @@ function layoutPreview() {
   $("exportInfo").textContent = `${p.cols}×${p.rows} grid of ${p.w}×${p.h} · span ${p.w * p.cols}×${p.h * p.rows} (${mp} MP)`;
   syncNumbers();
   document.documentElement.style.setProperty("--accent", p.accent);
-  history.replaceState(null, "", "#" + new URLSearchParams(Object.entries(p)).toString());
-  current = { p, lay };
-  clock.t = clock.t % p.loop;
+  history.replaceState(null, "", "#" + hashOf(p));
+  current = { p, lay, pw, ph };
+  labelsDirty = thumbDirty = true;
+  clock.t = clock.t % p.period;
+  $("loopNote").textContent = p.mul > 1
+    ? `These rates need ${p.mul} passes of the ${p.loop} s loop to line up, so it repeats every ${p.period} s. Video exports are ${p.period} s long.`
+    : "Speed, Roll, Shimmer and Bits flow are cycles per loop. Everything repeats exactly, so the loop plays forever without a jump.";
   updateKioskLinks();
 }
 
@@ -528,21 +577,33 @@ function meterFrame(now, renderMs) {
 function drawPreview() {
   queued = false;
   if (!R || !current || busyExporting) return;
+  const { p, lay, pw, ph } = current, tiles = [tile([0, 0, lay.W, lay.H], 0, 0, pw, ph)];
   const r0 = performance.now();
-  renderView(current.p, current.lay, clock.t, [0, 0, current.lay.W, current.lay.H], pctx);
+  renderTiles(p, lay, clock.t, tiles, pw, ph, null);
+  if (thumbDirty) {
+    // Must copy in the same task as the GL draw, before the browser clears the drawing buffer.
+    tctx.setTransform(1, 0, 0, 1, 0, 0);
+    tctx.drawImage(R.canvas, 0, 0, pw, ph);
+    tctx.setTransform(pw / lay.W, 0, 0, ph / lay.H, 0, 0);
+    window.StudioOverlay?.draw(tctx, lay.screens);
+    thumbDirty = false;
+  }
+  if (labelsDirty) { drawLabels(lctx, lay, tiles); labelsDirty = false; }
   if (clock.playing) meterFrame(r0, performance.now() - r0);
   else { meter.last = 0; $("fpsMeter").textContent = `paused · ${(performance.now() - r0).toFixed(1)} ms render`; }
-  const L = current.p.loop;
+  const L = current.p.period;
   if (document.activeElement !== $("scrub")) $("scrub").value = Math.round((clock.t / L) * 1000);
   $("clock").textContent = `${clock.t.toFixed(1)} / ${L} s`;
 }
 
 function schedule() { if (!queued) { queued = true; requestAnimationFrame(drawPreview); } }
 function settingsChanged() { layoutPreview(); schedule(); }
+// Motion-only values that readSettings derives; keep them out of shared links.
+const hashOf = (p) => new URLSearchParams(Object.entries(p).filter(([k]) => k !== "mul" && k !== "period")).toString();
 
 function tick(now) {
   if (clock.playing && current && !busyExporting) {
-    clock.t = (clock.t + (now - clock.last) / 1000) % current.p.loop;
+    clock.t = (clock.t + (now - clock.last) / 1000) % current.p.period;
     drawPreview();
   }
   clock.last = now;
@@ -599,9 +660,14 @@ function download(blob, name) {
 }
 const toBlob = (canvas) => new Promise((r) => canvas.toBlob(r, "image/png"));
 
-function screenCanvas(s) {
+// Renders tiles with labels baked in, then copies once into a 2D canvas for PNG encoding.
+function stillCanvas(p, lay, t, tiles, ow, oh) {
+  const ov = labelTexture(lay, tiles, ow, oh);
+  renderTiles(p, lay, t, tiles, ow, oh, ov);
   const c = document.createElement("canvas");
-  c.width = s.w; c.height = s.h;
+  c.width = ow; c.height = oh;
+  c.getContext("2d").drawImage(R.canvas, 0, 0);
+  ov?.free();
   return c;
 }
 
@@ -616,21 +682,13 @@ async function exportPNG(each) {
     const base = `studio-${p.seed}-${p.w}x${p.h}`;
     if (each || lay.screens.length === 1) {
       for (const s of lay.screens) {
-        const c = screenCanvas(s);
-        renderView(p, lay, t, [s.x, s.y, s.w, s.h], c.getContext("2d"));
+        const c = stillCanvas(p, lay, t, [tile([s.x, s.y, s.w, s.h], 0, 0, s.w, s.h)], s.w, s.h);
         download(await toBlob(c), lay.screens.length > 1 ? `${base}-r${s.row + 1}c${s.col + 1}.png` : `${base}.png`);
       }
     } else {
       // Span file for OS "span" mode: screens butted together, bezel strips cut out.
-      const span = document.createElement("canvas");
-      span.width = p.w * p.cols; span.height = p.h * p.rows;
-      const sctx = span.getContext("2d");
-      for (const s of lay.screens) {
-        const c = screenCanvas(s);
-        renderView(p, lay, t, [s.x, s.y, s.w, s.h], c.getContext("2d"));
-        sctx.drawImage(c, s.col * p.w, s.row * p.h);
-      }
-      download(await toBlob(span), `${base}-${p.cols}x${p.rows}.png`);
+      const tiles = lay.screens.map((s) => tile([s.x, s.y, s.w, s.h], s.col * p.w, s.row * p.h, s.w, s.h));
+      download(await toBlob(stillCanvas(p, lay, t, tiles, p.w * p.cols, p.h * p.rows)), `${base}-${p.cols}x${p.rows}.png`);
     }
   } finally {
     busyExporting = false;
@@ -657,61 +715,69 @@ const even = (n) => n - (n % 2);
 
 async function exportVideo(span) {
   const p = readSettings(), lay = layout(p);
-  const fps = p.fps, frames = Math.round(p.loop * fps), bitrate = p.vbr * 1e6;
+  const fps = p.fps, frames = Math.round(p.period * fps), bitrate = p.vbr * 1e6;
   const info = $("videoInfo"), bar = $("videoProgress");
   if (!window.StudioMP4 || !StudioMP4.supported) { info.textContent = "This browser has no WebCodecs video encoder. Use Chrome or Edge."; return; }
   // Each job is one output file: a screen, or the whole span with bezels cut out.
+  // Encoders need even sizes; an odd screen is drawn one pixel smaller rather than padded.
   const jobs = span
-    ? [{ name: `${p.cols}x${p.rows}`, w: even(p.w * p.cols), h: even(p.h * p.rows), tiles: lay.screens.map((s) => ({ s, x: s.col * p.w, y: s.row * p.h })) }]
-    : lay.screens.map((s) => ({ name: lay.screens.length > 1 ? `r${s.row + 1}c${s.col + 1}` : "", w: even(s.w), h: even(s.h), tiles: [{ s, x: 0, y: 0 }] }));
+    ? [{ name: `${p.cols}x${p.rows}`, w: even(p.w * p.cols), h: even(p.h * p.rows), tiles: lay.screens.map((s) => tile([s.x, s.y, s.w, s.h], s.col * p.w, s.row * p.h, s.w, s.h)) }]
+    : lay.screens.map((s) => ({ name: lay.screens.length > 1 ? `r${s.row + 1}c${s.col + 1}` : "", w: even(s.w), h: even(s.h), tiles: [tile([s.x, s.y, s.w, s.h], 0, 0, even(s.w), even(s.h))] }));
 
   busyExporting = true;
   videoAbort = new AbortController();
   for (const b of ["videoEach", "videoSpan", "exportSpan", "exportEach"]) $(b).disabled = true;
   $("videoCancel").hidden = false; bar.hidden = false;
   try {
-    for (let ji = 0; ji < jobs.length; ji++) {
-      const job = jobs[ji];
-      let config = await StudioMP4.pick(p.codec, job.w, job.h, fps, bitrate);
-      let note = "";
-      if (!config) {
+    // Pick every encoder first so a refusal stops the export before any work.
+    const notes = [];
+    for (const job of jobs) {
+      job.config = await StudioMP4.pick(p.codec, job.w, job.h, fps, bitrate);
+      if (!job.config) {
         // Fall back to the other codec before giving up; say so, since file sizes and players differ.
         const other = p.codec === "hevc" ? "avc" : "hevc";
-        config = await StudioMP4.pick(other, job.w, job.h, fps, bitrate);
-        if (config) note = ` ${CODEC_NAME[p.codec]} refused ${job.w}×${job.h}, so this file is ${CODEC_NAME[other]}.`;
+        job.config = await StudioMP4.pick(other, job.w, job.h, fps, bitrate);
+        if (job.config) notes.push(`${CODEC_NAME[p.codec]} refused ${job.w}×${job.h}, so ${job.name || "the file"} is ${CODEC_NAME[other]}.`);
       }
-      if (!config) {
+      if (!job.config) {
         info.textContent = `Neither HEVC nor H.264 encoding is available here at ${job.w}×${job.h}, ${fps} fps, ${p.vbr} Mbps.` +
           (span ? " Try MP4 per monitor." : " Try a lower frame rate or bitrate, or a smaller resolution.");
         return;
       }
-      const out = document.createElement("canvas");
-      out.width = job.w; out.height = job.h;
-      const octx = out.getContext("2d");
-      const tiles = job.tiles.map((tl) => ({ ...tl, c: screenCanvas(tl.s) }));
-      const t0 = performance.now();
-      const blob = await StudioMP4.encode({
-        config, fps, frames, signal: videoAbort.signal,
-        // Frame i is at t = i / fps; t = loop is never encoded, it is frame 0 again.
-        renderFrame(i) {
-          const t = i / fps;
-          for (const tl of tiles) {
-            renderView(p, lay, t, [tl.s.x, tl.s.y, tl.s.w, tl.s.h], tl.c.getContext("2d"));
-            octx.drawImage(tl.c, tl.x, tl.y);
-          }
-          return out;
-        },
-        onProgress(f) {
-          bar.value = (ji + f) / jobs.length;
-          const left = ((performance.now() - t0) / f) * (1 - f) / 1000;
-          info.textContent = `File ${ji + 1} of ${jobs.length}: ${Math.round(f * 100)}% · about ${Math.ceil(left)} s left · ${config.codec}`;
-        },
-      });
-      const name = `studio-${p.seed}-${p.loop}s-${fps}fps${job.name ? "-" + job.name : ""}.mp4`;
-      download(blob, name);
-      info.textContent = `Saved ${name} (${(blob.size / 1e6).toFixed(1)} MB, ${frames} frames, ${config.codec}).${note}`;
     }
-    if (jobs.length > 1) info.textContent = `Saved ${jobs.length} files, ${frames} frames each.`;
+    // Several encoders at once: each runs slower than the GPU renders, so screens encode in parallel.
+    // Each job's render and frame capture happen in one synchronous step, so sharing the GL canvas is safe.
+    const parallel = Math.min(3, jobs.length), done = new Array(jobs.length).fill(0), t0 = performance.now();
+    const progress = () => {
+      const f = done.reduce((s, v) => s + v, 0) / jobs.length;
+      bar.value = f;
+      const left = f > 0 ? ((performance.now() - t0) / f) * (1 - f) / 1000 : 0;
+      info.textContent = `Encoding ${jobs.length} file${jobs.length > 1 ? "s" : ""}, ${parallel} at a time: ${Math.round(f * 100)}% · about ${Math.ceil(left)} s left · ${jobs[0].config.codec}`;
+    };
+    let next = 0;
+    const worker = async () => {
+      while (next < jobs.length) {
+        const ji = next++, job = jobs[ji];
+        const ov = labelTexture(lay, job.tiles, job.w, job.h);
+        try {
+          const blob = await StudioMP4.encode({
+            config: job.config, fps, frames, signal: videoAbort.signal,
+            // Frame i is at t = i / fps; t = period is never encoded, it is frame 0 again.
+            // The encoder reads the GL canvas straight after this returns, in the same task.
+            renderFrame(i) {
+              renderTiles(p, lay, i / fps, job.tiles, job.w, job.h, ov);
+              return R.canvas;
+            },
+            onProgress(f) { done[ji] = f; progress(); },
+          });
+          download(blob, `studio-${p.seed}-${p.period}s-${fps}fps${job.name ? "-" + job.name : ""}.mp4`);
+          job.size = blob.size;
+        } finally { ov?.free(); }
+      }
+    };
+    await Promise.all(Array.from({ length: parallel }, worker));
+    const mb = (jobs.reduce((s, j) => s + j.size, 0) / 1e6).toFixed(1), secs = ((performance.now() - t0) / 1000).toFixed(1);
+    info.textContent = `Saved ${jobs.length} file${jobs.length > 1 ? "s" : ""} (${mb} MB, ${frames} frames each, ${jobs[0].config.codec}) in ${secs} s. ${notes.join(" ")}`;
   } catch (e) {
     info.textContent = e.name === "AbortError" ? "Cancelled." : `Export failed: ${e.message}`;
   } finally {
@@ -737,7 +803,7 @@ const onLocalhost = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostna
 if (onLocalhost) fetch("/__lan").then((r) => r.json()).then((j) => { if (j.ip) { lanOrigin = `http://${j.ip}:${location.port}`; if (current) updateKioskLinks(); } }).catch(() => {});
 
 function kioskUrl(i) {
-  const p = readSettings(), q = new URLSearchParams(Object.entries(p));
+  const q = new URLSearchParams(hashOf(readSettings()));
   q.set("kiosk", i + 1);
   const st = window.StudioOverlay?.getState();
   if (st && st.text.on) q.set("lbl", b64(st.text));
@@ -771,31 +837,33 @@ function updateKioskLinks() {
 
 function runKiosk(index, params) {
   document.body.className = "kiosk";
-  const cv = document.createElement("canvas");
+  const cv = R.canvas, lab = document.createElement("canvas");
   cv.id = "kioskCanvas";
+  lab.id = "kioskLabels";
   const hint = document.createElement("div");
   hint.id = "kioskHint";
   hint.textContent = "Double-click for full screen · F shows frame rate";
-  // The meter sits in <main>, which kiosk hides; move it out. F or &fps=1 shows it.
+  // The meter sits in <main>, which kiosk hides; move it out. F or &meter=1 shows it (fps is the frame rate).
   const fpsEl = $("fpsMeter");
-  document.body.append(cv, hint, fpsEl);
-  fpsEl.hidden = params.get("fps") !== "1";
+  document.body.append(cv, lab, hint, fpsEl);
+  fpsEl.hidden = params.get("meter") !== "1";
   addEventListener("keydown", (e) => { if (e.key === "f" || e.key === "F") fpsEl.hidden = !fpsEl.hidden; });
   setTimeout(() => (hint.style.opacity = 0), 4000);
   addEventListener("dblclick", () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); });
   if (params.has("lbl")) { try { window.StudioOverlay?.useText(unb64(params.get("lbl")), readSettings().accent); } catch { /* bad link: no label */ } }
-  const ctx = cv.getContext("2d");
+  const lctx2 = lab.getContext("2d");
   const p = readSettings(), lay = layout(p);
+  let sized = "";
   const s = lay.screens[clamp(index - 1, 0, lay.screens.length - 1)];
   function frame() {
     const dpr = window.devicePixelRatio || 1;
     const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
-    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
     // Cover: keep the screen's aspect and crop the window's extra, centred.
     const k = Math.max(w / s.w, h / s.h), vw = w / k, vh = h / k;
-    const view = [s.x + (s.w - vw) / 2, s.y + (s.h - vh) / 2, vw, vh];
+    const tiles = [tile([s.x + (s.w - vw) / 2, s.y + (s.h - vh) / 2, vw, vh], 0, 0, w, h)];
+    if (sized !== w + "x" + h) { sized = w + "x" + h; lab.width = w; lab.height = h; drawLabels(lctx2, lay, tiles); }
     const r0 = performance.now();
-    renderView(p, lay, (Date.now() / 1000) % p.loop, view, ctx);
+    renderTiles(p, lay, (Date.now() / 1000) % p.period, tiles, w, h, null);
     meterFrame(r0, performance.now() - r0);
     requestAnimationFrame(frame);
   }
@@ -816,8 +884,11 @@ function shuffleMotion() {
   const pickInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
   for (const id of ["flow", "drift", "breathe", "wander"]) $(id).value = pickInt(0, 70);
   $("swipeLen").value = pickInt(40, 130);
-  $("speed").value = pickInt(1, 3);
-  for (const id of ["roll", "sheen", "bitsFlow"]) $(id).value = pickInt(-2, 2);
+  const quarter = (a, b) => pickInt(a * 4, b * 4) / 4;
+  $("speed").value = quarter(0.5, 2.5);
+  for (const id of ["roll", "bitsFlow"]) $(id).value = quarter(-2, 2);
+  $("sheen").value = quarter(0, 3);
+  $("sheenDir").value = ["ltr", "rtl", "swipe", "random"][pickInt(0, 3)];
   $("swipe").value = ["off", "off", "ltr", "rtl", "alt", "random"][pickInt(0, 5)];
   settingsChanged();
 }
@@ -845,7 +916,7 @@ if (params.has("kiosk") && R) {
     el.addEventListener("input", () => { $("customRes").hidden = $("res").value !== "custom"; settingsChanged(); });
   });
   $("scrub").addEventListener("input", () => {
-    if (current) clock.t = ($("scrub").value / 1000) * current.p.loop;
+    if (current) clock.t = ($("scrub").value / 1000) * current.p.period;
     setPlaying(false);
   });
   $("play").onclick = () => setPlaying(!clock.playing);
@@ -866,8 +937,8 @@ if (params.has("kiosk") && R) {
     if (e.key === "p" || e.key === "P") setPlaying(!clock.playing);
   });
   window.StudioOverlay?.mount($("overlayPanel"), {
-    onChange: () => { if (current) updateKioskLinks(); schedule(); },
-    getPreview: () => ({ canvas: preview, settings: readSettings(), layout: layout(readSettings()) }),
+    onChange: () => { if (current) updateKioskLinks(); labelsDirty = true; schedule(); },
+    getPreview: () => ({ canvas: thumb, settings: readSettings(), layout: layout(readSettings()) }),
   });
   numberFields(document.querySelector("aside"));
   // WebCodecs exists only on secure pages: localhost or https, not a plain-http LAN address.
