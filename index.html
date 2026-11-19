@@ -37,8 +37,14 @@
   .row { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; }
   button { background: #1d221d; color: var(--text); border: 1px solid var(--line); padding: 6px 10px; font: inherit; cursor: pointer; }
   button:hover { border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
   button.primary { background: var(--accent); color: #071007; border-color: var(--accent); font-weight: 600; }
   .swatch { width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); }
+  .transport { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; margin: 0 0 8px; }
+  .time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; min-width: 76px; text-align: right; }
+  progress { width: 100%; accent-color: var(--accent); }
+  .links { display: grid; gap: 4px; margin: 0 0 8px; }
+  .links a { color: var(--text); font-size: 12px; }
   main { position: relative; display: grid; place-items: center; padding: 24px; overflow: hidden; }
   #stage { position: relative; max-width: 100%; max-height: 100%; }
   #preview { display: block; width: 100%; height: auto; }
@@ -47,9 +53,13 @@
   .hint { position: absolute; left: 24px; bottom: 12px; color: var(--muted); font-size: 12px; }
   .note { color: var(--muted); font-size: 12px; margin: 4px 0 8px; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  body.kiosk { display: block; background: #000; cursor: none; overflow: hidden; }
+  body.kiosk aside, body.kiosk main { display: none; }
+  #kioskCanvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; }
+  #kioskHint { position: fixed; left: 16px; bottom: 16px; color: #9aa59a; font-size: 12px; transition: opacity 1s; }
   @media (max-width: 760px) { body { grid-template-columns: 1fr; grid-template-rows: 45vh auto; } main { order: -1; } }
 </style>
-<link rel="stylesheet" href="overlay.css?v=2">
+<link rel="stylesheet" href="overlay.css?v=3">
 </head>
 <body>
 <aside>
@@ -103,21 +113,74 @@
   </fieldset>
 
   <fieldset>
+    <legend>Motion</legend>
+    <div class="transport">
+      <button id="play" title="P">Pause</button>
+      <input type="range" id="scrub" min="0" max="1000" value="0" aria-label="Position in loop">
+      <span class="time" id="clock">0.0 / 20 s</span>
+    </div>
+    <label>Loop (s) <input type="range" id="loop" min="2" max="120" value="20"><output></output></label>
+    <label>Speed <input type="range" id="speed" min="1" max="6" value="1"><output></output></label>
+    <label class="wide">Swipe
+      <select id="swipe">
+        <option value="off">Off</option>
+        <option value="ltr">Left to right</option>
+        <option value="rtl">Right to left</option>
+        <option value="alt">Alternate</option>
+        <option value="random">Random</option>
+      </select>
+    </label>
+    <label>Swipe length <input type="range" id="swipeLen" min="20" max="150" value="70"><output></output></label>
+    <label>Flow <input type="range" id="flow" min="0" max="100" value="25"><output></output></label>
+    <label>Drift <input type="range" id="drift" min="0" max="100" value="30"><output></output></label>
+    <label>Breathe <input type="range" id="breathe" min="0" max="100" value="15"><output></output></label>
+    <label>Wander <input type="range" id="wander" min="0" max="100" value="15"><output></output></label>
+    <label>Roll <input type="range" id="roll" min="-4" max="4" value="1"><output></output></label>
+    <label>Sheen <input type="range" id="sheen" min="-4" max="4" value="1"><output></output></label>
+    <label>Bits flow <input type="range" id="bitsFlow" min="-4" max="4" value="1"><output></output></label>
+    <p class="note">Everything repeats once per loop, so any length plays forever without a jump. Speed, Roll, Sheen and Bits flow are whole cycles per loop.</p>
+  </fieldset>
+
+  <fieldset>
     <legend>Seed</legend>
     <label class="wide">Seed <input type="number" id="seed" min="0" max="999999999"></label>
     <div class="row">
       <button id="reseed" title="Space">New seed</button>
-      <button id="shuffle" title="S">Shuffle all</button>
+      <button id="shuffle" title="S">Shuffle shape</button>
+      <button id="shuffleMotion" title="M">Shuffle motion</button>
     </div>
   </fieldset>
 
   <fieldset>
-    <legend>Export</legend>
+    <legend>Stills</legend>
     <div class="row">
       <button class="primary" id="exportSpan">Download span PNG</button>
       <button id="exportEach">One PNG per monitor</button>
     </div>
     <p class="note" id="exportInfo"></p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Video loop</legend>
+    <label class="wide">Frame rate
+      <select id="fps"><option>24</option><option>25</option><option selected>30</option><option>50</option><option>60</option></select>
+    </label>
+    <label class="wide">Bitrate
+      <select id="vbr"><option value="12">12 Mbps</option><option value="25" selected>25 Mbps</option><option value="50">50 Mbps</option><option value="80">80 Mbps</option></select>
+    </label>
+    <div class="row">
+      <button class="primary" id="videoEach">MP4 per monitor</button>
+      <button id="videoSpan">Span MP4</button>
+      <button id="videoCancel" hidden>Cancel</button>
+    </div>
+    <progress id="videoProgress" max="1" value="0" hidden></progress>
+    <p class="note" id="videoInfo"></p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Kiosk</legend>
+    <p class="note">Open one link per display PC. Each plays its own screen of the wall, in step with the others by the system clock. Text labels travel in the link; images don't.</p>
+    <div class="links" id="kioskLinks"></div>
   </fieldset>
 
   <fieldset id="overlayPanel">
@@ -127,16 +190,22 @@
 
 <main>
   <div id="stage"><canvas id="preview"></canvas></div>
-  <div class="hint">Space: new seed · S: shuffle · the URL keeps your settings</div>
+  <div class="hint">Space: new seed · S: shuffle shape · M: shuffle motion · P: play/pause · the URL keeps your settings</div>
 </main>
 
-<script src="overlay.js?v=2"></script>
+<script src="gl.js?v=1"></script>
+<script src="mp4.js?v=1"></script>
+<script src="overlay.js?v=3"></script>
 <script>
 "use strict";
 
 const PALETTES = ["#7fd321", "#107c10", "#3ad16b", "#c8ff3d", "#2fd6b0", "#e8e8e8", "#38a8ff", "#ff5a36"];
 const $ = (id) => document.getElementById(id);
-const ctrlIds = ["cols", "rows", "gap", "accent", "bgGlow", "whites", "busy", "fill", "angle", "spread", "curl", "chaos", "twist", "shift", "glow", "bits", "grain", "seed"];
+const SHAPE_IDS = ["cols", "rows", "gap", "accent", "bgGlow", "whites", "busy", "fill", "angle", "spread", "curl", "chaos", "twist", "shift", "glow", "bits", "grain", "seed"];
+const MOTION_IDS = ["loop", "speed", "swipe", "swipeLen", "flow", "drift", "breathe", "wander", "roll", "sheen", "bitsFlow", "fps", "vbr"];
+const ctrlIds = [...SHAPE_IDS, ...MOTION_IDS];
+const TEXT_IDS = new Set(["accent", "swipe"]);
+const TAU = Math.PI * 2;
 
 // ---------- helpers ----------
 
@@ -163,16 +232,29 @@ function hexToHsl(hex) {
   return [h, s * 100, l * 100];
 }
 
-const hsla = (h, s, l, a = 1) => `hsla(${h.toFixed(1)},${s.toFixed(1)}%,${l.toFixed(1)}%,${a.toFixed(3)})`;
+// CSS hsl() semantics: hue wraps, s and l clamp to 0–100.
+function hsl(h, s, l) {
+  h = ((h % 360) + 360) % 360; s = clamp(s, 0, 100) / 100; l = clamp(l, 0, 100) / 100;
+  const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+  return [f(0), f(8), f(4)];
+}
+const hexRgb = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16 & 255) / 255, (n >> 8 & 255) / 255, (n & 255) / 255]; };
+
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const smooth = (x) => x * x * (3 - 2 * x);
+const smoothstep = (a, b, x) => smooth(clamp((x - a) / (b - a), 0, 1));
+const frac = (x) => x - Math.floor(x);
+// |x| with the corner at 0 rounded off; true |x| puts a visible kink in the ribbon edge.
+const sabs = (x, k = 0.25) => (Math.sqrt(x * x + k * k) - k) / (Math.sqrt(1 + k * k) - k);
 
 // ---------- settings ----------
 
 function readSettings() {
   const [rw, rh] = $("res").value === "custom" ? [+$("w").value, +$("h").value] : $("res").value.split("x").map(Number);
   const p = { w: clamp(rw || 1920, 320, 16384), h: clamp(rh || 1080, 320, 16384), res: $("res").value };
-  for (const id of ctrlIds) p[id] = id === "accent" ? $(id).value : +$(id).value;
+  for (const id of ctrlIds) p[id] = TEXT_IDS.has(id) ? $(id).value : +$(id).value;
   return p;
 }
 
@@ -184,17 +266,39 @@ function layout(p) {
 }
 
 // ---------- the generator ----------
-// Everything is laid out in virtual-canvas units (the full span incl. bezels), with sizes relative to H,
-// so a preview and a full-size export of the same settings draw the same picture.
+// Sizes are in wall pixels (the whole span incl. bezels) relative to H, so every output size draws the
+// same picture. A frame is a pure function of (settings, t mod loop): shape randoms come from the seed,
+// motion randoms from a second stream, so adding motion never changes a seed's still.
 
-// |x| with the corner at 0 rounded off; true |x| puts a visible kink in the ribbon edge.
-const sabs = (x, k = 0.25) => (Math.sqrt(x * x + k * k) - k) / (Math.sqrt(1 + k * k) - k);
+function palette(p, white) {
+  const [hue, S] = hexToHsl(p.accent), h2 = hue + p.shift;
+  if (white) return {
+    cRimHot: hsl(hue, 10, 96), cRim: hsl(hue, 12, 80),
+    cCore075: hsl(hue, 8, 7.5), cCore1: hsl(hue, 8, 10), cCore09: hsl(hue, 8, 9), cCore13: hsl(hue, 8, 13),
+    cSheen: hsl(hue, 10, 42), cRefract: hsl(h2, S * 0.6, 55), cRefractHot: hsl(h2, S * 0.5, 75),
+    cSpec: [1, 1, 1], cRefl: [245 / 255, 248 / 255, 250 / 255], cWall: hsl(hue, 10, 70),
+  };
+  return {
+    cRimHot: hsl(hue, S, 80), cRim: hsl(hue, S * 1.1, 52),
+    cCore075: hsl(hue, S, 9), cCore1: hsl(hue, S, 12), cCore09: hsl(hue, S, 10.8), cCore13: hsl(hue, S, 15.6),
+    cSheen: hsl(hue, S, 40), cRefract: hsl(h2, S, 48), cRefractHot: hsl(h2, S, 70),
+    cSpec: [1, 1, 248 / 255], cRefl: hsl(hue, S * 0.3, 92), cWall: hsl(hue, S, 45),
+  };
+}
 
-function buildScene(p, W, H, px) {
-  const rnd = mulberry32(p.seed);
+// Fade along the ribbon, so ends dissolve into the dark instead of stopping at the frame.
+const envelope = (fadeA, fadeB, u) => (u < 0.5 ? lerp(fadeA, 1, smooth(u * 2)) : lerp(1, fadeB, smooth(u * 2 - 1)));
+
+// px: device pixels per wall pixel for the output this frame is drawn at.
+function buildFrame(p, W, H, px, t) {
+  const rnd = mulberry32(p.seed), mrnd = mulberry32((p.seed ^ 0x5bd1e995) >>> 0);
   const r = (a = 0, b = 1) => lerp(a, b, rnd());
   const gauss = () => (rnd() + rnd() + rnd() - 1.5) / 1.5;
   const busy = p.busy / 100, spread = p.spread / 100, curl = p.curl / 100, chaos = p.chaos / 100, whites = p.whites / 100, twist = p.twist / 100;
+  const tau = frac(t / p.loop), kb = p.speed;
+  const drift = p.drift / 100, breathe = p.breathe / 100, flow = p.flow / 100, wander = p.wander / 100;
+  const swLen = p.swipeLen / 100, swSoft = 0.12;
+  const wave = (k, ph) => Math.sin(TAU * k * tau + ph);
 
   const ang = (p.angle * Math.PI) / 180;
   // Wide spans flatten the slope and add ribbons, so the swoosh crosses every screen.
@@ -212,331 +316,168 @@ function buildScene(p, W, H, px) {
   const bowDir = r(-1, 1);
   const kShared = r(1.6, 2.6);
   const fanW = lerp(0.12, 1.1, spread);
+  // Segments about 4 device px long; the shader interpolates the cross-section, so this only sets edge smoothness.
+  const N = Math.round(clamp((2 * L * px) / 4, 160, 4000));
+  const fill = p.fill / 100;
+  const hair = Math.max(H * 0.0011, 1 / px), specExtent = hair / 2 + 1 / px;
   const ribbons = [];
 
   for (let i = 0; i < count; i++) {
     const fan = count > 1 ? (i / (count - 1)) * 2 - 1 : 0;
     const jit = () => gauss() * chaos;
-    const offF = (fan * 0.16 * fanW + jit() * 0.08) * H;
-    const offL = (sideBias[0] + fan * fanW + jit() * 0.5) * H;
-    const offR = (sideBias[1] + cross * fan * fanW + jit() * 0.5) * H;
+    let offF = (fan * 0.16 * fanW + jit() * 0.08) * H;
+    let offL = (sideBias[0] + fan * fanW + jit() * 0.5) * H;
+    let offR = (sideBias[1] + cross * fan * fanW + jit() * 0.5) * H;
     const k = Math.max(1.6, kShared + jit() * 0.6); // below ~1.5 |t|^k has a visible corner at the crossing
-    const bow = (bowDir * 0.8 + jit() * 0.5) * H * lerp(0.02, 0.4, curl);
+    let bow = (bowDir * 0.8 + jit() * 0.5) * H * lerp(0.02, 0.4, curl);
     const curlAmp = curl * chaos * H * r(-0.3, 0.3);
     const curlFreq = r(0.6, 1.6), curlPh = r(0, Math.PI * 2);
-
     const wide = rnd() < 0.3;
-    const wmax = H * (wide ? r(0.22, 0.4) : r(0.08, 0.18));
+    let wmax = H * (wide ? r(0.22, 0.4) : r(0.08, 0.18));
     const grow = rnd() < 0.5 ? 1 : -1;
     const ge = r(0.5, 1.4);
     const pinch = r(0.45, 0.8);
-    // Twist turns the ribbon about its spine; |cos| is the visible width, the sign picks front or back face.
     const tw = { freq: lerp(0, 1.1, twist) * r(0.6, 1.2), ph: r(0, Math.PI * 2) };
+    const refl = [r(0.8, 2.4), r(0, Math.PI * 2)];
+    const white = rnd() < whites * 0.3;
+    const fadeA = r(0, 0.4), fadeB = r(0, 0.4), layer = r(0, 1);
 
-    // Slices about 3 device px long; coarser ones show as facets and corners in the rims.
-    const N = Math.round(clamp((2 * L * px) / 3, 200, 4000));
-    const center = [], width = [], phase = [], edgeF = [];
-    const refl = { freq: r(0.8, 2.4), ph: r(0, Math.PI * 2) };
+    // Motion. All periodic in tau with whole-number cycles, so t = loop lands exactly on t = 0.
+    const mp = Array.from({ length: 8 }, () => mrnd() * TAU);
+    const wm = 1 + Math.floor(mrnd() * 3), wk = lerp(1.5, 3.5, mrnd()), fk = lerp(1.2, 2.6, mrnd());
+    const swOff = mrnd(), coin = mrnd();
+    const dir = p.swipe === "rtl" ? -1 : p.swipe === "alt" ? (i % 2 ? -1 : 1) : p.swipe === "random" ? (coin < 0.5 ? -1 : 1) : 1;
+    offL += drift * H * 0.12 * wave(kb, mp[0]);
+    offR += drift * H * 0.12 * wave(kb, mp[1]);
+    offF += drift * H * 0.05 * wave(kb, mp[2]);
+    bow *= 1 + drift * 0.35 * wave(kb, mp[3]);
+    wmax *= 1 + breathe * 0.35 * wave(kb, mp[4]);
+    const rollPh = TAU * p.roll * tau;
+    refl[1] += TAU * p.sheen * tau;
+    // Swipe window [head - len, head] travels along the ribbon; it wraps only while fully off the ribbon.
+    const head = p.swipe === "off" ? 0 : -swSoft + (1 + swLen + 2 * swSoft) * frac(kb * tau + swOff);
+
+    const center = new Array(N + 1), width = new Float32Array(N + 1), phase = new Float32Array(N + 1);
+    const edgeF = new Float32Array(N + 1), env = new Float32Array(N + 1);
     for (let j = 0; j <= N; j++) {
-      const t = (j / N) * 2 - 1;
-      const side = t < 0 ? offL : offR;
-      const perp = offF + side * Math.pow(Math.abs(t), k) + bow * (1 - t * t) + curlAmp * Math.sin(Math.PI * t * curlFreq + curlPh) * (1 - t * t * 0.5);
-      const along = t * L;
-      center.push([focal[0] + d[0] * along + nrm[0] * perp, focal[1] + d[1] * along + nrm[1] * perp]);
-      const u = grow > 0 ? (t + 1) / 2 : (1 - t) / 2;
-      const ph = Math.PI * tw.freq * t + tw.ph;
-      phase.push(ph);
+      const tt = (j / N) * 2 - 1, u01 = j / N;
+      const side = tt < 0 ? offL : offR;
+      let perp = offF + side * Math.pow(Math.abs(tt), k) + bow * (1 - tt * tt) + curlAmp * Math.sin(Math.PI * tt * curlFreq + curlPh) * (1 - tt * tt * 0.5);
+      perp += wander * H * 0.09 * Math.sin(TAU * wm * kb * tau + mp[5] + wk * tt);
+      perp += flow * H * 0.06 * Math.sin(fk * Math.PI * tt - TAU * kb * tau * dir + mp[6]) * (1 - 0.3 * tt * tt);
+      const along = tt * L;
+      center[j] = [focal[0] + d[0] * along + nrm[0] * perp, focal[1] + d[1] * along + nrm[1] * perp];
+      const u = grow > 0 ? (tt + 1) / 2 : (1 - tt) / 2;
+      const ph = Math.PI * tw.freq * tt + tw.ph + rollPh;
+      phase[j] = ph;
       // Seen at angle ph, a strip of face width wf and thickness T spans wf|cos| + T|sin|; the T part is
       // its side wall, drawn as a lit edge so a twist reads as a turn and not a pinch.
-      const wf = wmax * (0.35 + 0.65 * Math.pow(u, ge)) * (pinch + (1 - pinch) * Math.pow(t * t + 0.004, 0.35));
+      const wf = wmax * (0.35 + 0.65 * Math.pow(u, ge)) * (pinch + (1 - pinch) * Math.pow(tt * tt + 0.004, 0.35));
       const sn = Math.sin(ph), T = wf * 0.18, wall = T * Math.sign(sn) * sabs(sn);
       const vis = wf * sabs(Math.cos(ph)) + Math.abs(wall);
-      width.push(vis);
-      edgeF.push(wall / vis);
+      width[j] = vis;
+      edgeF[j] = wall / vis;
+      let sw = 1;
+      if (p.swipe !== "off") {
+        const uu = dir > 0 ? u01 : 1 - u01;
+        sw = smoothstep(head - swLen - swSoft, head - swLen, uu) * (1 - smoothstep(head, head + swSoft, uu));
+      }
+      env[j] = envelope(fadeA, fadeB, u01) * sw;
+    }
+
+    // Strip: top/bottom vertex pairs. Specular: thin strips along whichever wall faces the light.
+    const strip = new Float32Array((N + 1) * 14);
+    const specTop = new Float32Array((N + 1) * 8), specBot = new Float32Array((N + 1) * 8);
+    let anySpec = false;
+    for (let j = 0; j <= N; j++) {
+      const a = center[Math.max(0, j - 1)], b = center[Math.min(N, j + 1)];
+      let tx = b[0] - a[0], ty = b[1] - a[1];
+      const m = Math.hypot(tx, ty) || 1; tx /= m; ty /= m;
+      const nx = -ty, ny = tx, hw = width[j] / 2, c = center[j];
+      const top = [c[0] + nx * hw, c[1] + ny * hw], bot = [c[0] - nx * hw, c[1] - ny * hw];
+      const ph = phase[j], u = j / N;
+      strip.set([top[0], top[1], 0, u, ph, edgeF[j], env[j], bot[0], bot[1], 1, u, ph, edgeF[j], env[j]], j * 14);
+      const cs = Math.cos(ph);
+      const s = env[j] * Math.pow(Math.abs(cs), 3) * (0.35 + 0.65 * Math.max(0, Math.sin(ph + 0.8)));
+      const sT = cs >= 0 ? s : 0, sB = cs < 0 ? s : 0;
+      if (s > 0.02) anySpec = true;
+      specTop.set([top[0] - nx * specExtent, top[1] - ny * specExtent, -1, sT, top[0] + nx * specExtent, top[1] + ny * specExtent, 1, sT], j * 8);
+      specBot.set([bot[0] - nx * specExtent, bot[1] - ny * specExtent, -1, sB, bot[0] + nx * specExtent, bot[1] + ny * specExtent, 1, sB], j * 8);
     }
 
     ribbons.push({
-      center, width, phase, edgeF, refl, wide,
-      white: rnd() < whites * 0.3,
-      fadeA: r(0, 0.4), fadeB: r(0, 0.4),
-      layer: r(0, 1),
+      strip, spec: anySpec ? [specTop, specBot] : null, pal: palette(p, white),
+      body: lerp(0.35, 0.9, fill) * (wide ? 0.75 : 1), refl, layer, center, env, dir,
     });
   }
   ribbons.sort((a, b) => a.layer - b.layer);
 
-  const trails = [];
+  // Pixel bits ride along their host ribbon and wrap where the ribbon runs off the wall.
+  const [hue, S] = hexToHsl(p.accent);
+  const tones = [hsl(hue, S, 55), [244 / 255, 244 / 255, 244 / 255], hsl(hue, S, 75), [0, 0, 0]];
   const trailCount = Math.round(Math.pow(p.bits / 100, 1.4) * 60);
+  const quads = [];
   for (let i = 0; i < trailCount && ribbons.length; i++) {
     const host = ribbons[Math.floor(rnd() * ribbons.length)];
     const start = r(0.05, 0.85), len = r(0.06, 0.16), side = rnd() < 0.5 ? 1 : -1;
     const n = Math.round(r(8, 30)), size0 = H * r(0.004, 0.011);
-    const squares = [];
     for (let s = 0; s < n; s++) {
       if (rnd() < 0.15) continue;
-      squares.push({ t: start + (s / n) * len, size: size0 * lerp(1, 0.35, s / n) * r(0.6, 1.2), off: side * H * r(0.06, 0.1), tone: rnd() });
-    }
-    trails.push({ host, squares });
-  }
-
-  return { focal, ribbons, trails, rnd };
-}
-
-function outline(rb) {
-  const c = rb.center, w = rb.width, top = [], bot = [];
-  for (let j = 0; j < c.length; j++) {
-    const a = c[Math.max(0, j - 1)], b = c[Math.min(c.length - 1, j + 1)];
-    let tx = b[0] - a[0], ty = b[1] - a[1];
-    const m = Math.hypot(tx, ty) || 1; tx /= m; ty /= m;
-    const hw = w[j] / 2;
-    top.push([c[j][0] - ty * hw, c[j][1] + tx * hw]);
-    bot.push([c[j][0] + ty * hw, c[j][1] - tx * hw]);
-  }
-  return { top, bot };
-}
-
-const smooth = (x) => x * x * (3 - 2 * x);
-// Fade along the ribbon, so ends dissolve into the dark instead of stopping at the frame.
-const envelope = (rb, u) => (u < 0.5 ? lerp(rb.fadeA, 1, smooth(u * 2)) : lerp(1, rb.fadeB, smooth(u * 2 - 1)));
-
-// Wide soft glow without ctx.filter (Safari lacks it): halve the frame one step at a time, add each
-// smaller level back onto the next larger one, then scale up 2x at a time. Bigger single jumps
-// skip pixels on the way down and stretch them into blocks on the way up.
-function bloom(ctx, amount) {
-  const src = ctx.canvas;
-  if (!src.width || !src.height) return;
-  const make = (w, h) => {
-    const c = document.createElement("canvas");
-    c.width = Math.max(1, w); c.height = Math.max(1, h);
-    const g = c.getContext("2d");
-    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
-    return c;
-  };
-  const levels = [src];
-  while (levels.length < 9) {
-    const p = levels[levels.length - 1];
-    if (p.width < 4 || p.height < 4) break;
-    const c = make(Math.ceil(p.width / 2), Math.ceil(p.height / 2));
-    c.getContext("2d").drawImage(p, 0, 0, c.width, c.height);
-    levels.push(c);
-  }
-  // Levels finer than 1/8 are left out: they keep the lines sharp, and sharp lines blown up show as blocks.
-  const base = Math.min(3, levels.length - 1);
-  for (let i = levels.length - 2; i >= base; i--) {
-    const g = levels[i].getContext("2d");
-    g.globalCompositeOperation = "lighter";
-    g.globalAlpha = 0.8;
-    g.drawImage(levels[i + 1], 0, 0, levels[i].width, levels[i].height);
-  }
-  let up = levels[base];
-  for (let i = base - 1; i >= 1; i--) {
-    const c = make(levels[i].width, levels[i].height);
-    c.getContext("2d").drawImage(up, 0, 0, c.width, c.height);
-    up = c;
-  }
-  ctx.save();
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
-  ctx.globalCompositeOperation = "screen";
-  ctx.globalAlpha = Math.min(1, amount * 0.45);
-  ctx.drawImage(up, 0, 0, src.width, src.height);
-  ctx.restore();
-}
-
-// Thick glass, drawn slice by slice into `lctx` (a scratch layer). Each slice has its own cross-width
-// gradient: a hot bevel on both walls, a dark tinted core, and an inner sheen that slides across as the
-// ribbon twists. Slices share exact vertices and are added together, so their antialiased edges sum to
-// full coverage and leave no seams; the finished layer is then laid over the scene opaquely.
-function drawGlass(lctx, rb, o, pal, fill) {
-  const { top, bot } = o, n = top.length - 1;
-  const body = lerp(0.35, 0.9, fill) * (rb.wide ? 0.75 : 1);
-  for (let j = 0; j < n; j++) {
-    const e = envelope(rb, j / n);
-    if (e < 0.01) continue;
-    const ph = rb.phase[j], front = Math.cos(ph) >= 0;
-    // Back faces are darker and swap which wall catches the light.
-    const lit = front ? 1 : 0.7;
-    const [a, b] = front ? [top[j], bot[j]] : [bot[j], top[j]];
-    const ea = e * body;
-    // Soft patches along the length where the face mirrors a bright studio light.
-    const mirror = Math.pow(Math.max(0, Math.sin(Math.PI * 2 * rb.refl.freq * (j / n) + rb.refl.ph)), 6) * lit * e;
-    // Each band keeps to its own lane: when two stops pass each other the gradient reorders and
-    // the colour jumps, which shows as a hard seam across the ribbon.
-    const hl = 0.62 + 0.18 * Math.sin(ph);
-    const hl2 = 0.22 + 0.05 * Math.sin(ph * 1.7);
-    const face = [
-      [0, pal.rimHot(e * lit)], [0.012, pal.rim(0.95 * e * lit)], [0.05, pal.rim(0.7 * e * lit)],
-      [0.1, pal.core(0.9 * ea, 0.75)],
-      [hl2 - 0.06, pal.core(0.85 * ea, 1)], [hl2, pal.refl(0.15 + 0.75 * mirror)], [hl2 + 0.07, pal.core(0.85 * ea, 1)],
-      [Math.max(hl2 + 0.1, hl - 0.16), pal.core(0.85 * ea, 1)], [hl, pal.sheen((0.7 + 0.3 * mirror) * ea * lit)],
-      [Math.min(0.86, hl + 0.2), pal.core(0.85 * ea, 0.9)],
-      [0.9, pal.core(0.9 * ea, 1.3)], [0.96, pal.refract(0.85 * e * lit)], [1, pal.refractHot(e * lit)],
-    ];
-    // Side wall takes fraction |f| of the visible width, at the a end for f > 0.
-    const f = rb.edgeF[j] * (front ? 1 : -1), af = Math.min(1, Math.abs(f));
-    const g = lctx.createLinearGradient(a[0], a[1], b[0], b[1]);
-    const map = f > 0 ? (u) => af + u * (1 - af) : (u) => u * (1 - af);
-    const addFace = () => { for (const [u, c] of face) g.addColorStop(clamp(map(u), 0, 1), c); };
-    // Stops at equal offsets keep insertion order, so add whichever part comes first across the ribbon first.
-    if (f <= 0) addFace();
-    if (af > 0.01) {
-      const wall = [[0, pal.rimHot(e)], [0.5, pal.wall(0.9 * e)], [1, pal.rimHot(0.85 * e)]];
-      for (const [u, c] of wall) g.addColorStop(f > 0 ? u * af : 1 - u * af, c); // u = 0 is the outer edge
-    }
-    if (f > 0) addFace();
-    lctx.fillStyle = g;
-    lctx.beginPath();
-    lctx.moveTo(top[j][0], top[j][1]); lctx.lineTo(top[j + 1][0], top[j + 1][1]);
-    lctx.lineTo(bot[j + 1][0], bot[j + 1][1]); lctx.lineTo(bot[j][0], bot[j][1]);
-    lctx.closePath();
-    lctx.fill();
-  }
-}
-
-// Specular hairline on the lit wall, brightest where that face turns toward the viewer.
-function drawSpecular(ctx, rb, o, pal, H, px) {
-  const n = rb.center.length - 1;
-  ctx.lineWidth = Math.max(H * 0.0011, 1 / px);
-  ctx.lineCap = "butt"; // round caps would double up at every segment joint
-  for (let j = 0; j < n; j++) {
-    const ph = rb.phase[j], c = Math.cos(ph);
-    const s = envelope(rb, j / n) * Math.pow(Math.abs(c), 3) * (0.35 + 0.65 * Math.max(0, Math.sin(ph + 0.8)));
-    if (s < 0.03) continue;
-    const pts = c >= 0 ? o.top : o.bot;
-    ctx.strokeStyle = pal.spec(s);
-    ctx.beginPath(); ctx.moveTo(pts[j][0], pts[j][1]); ctx.lineTo(pts[j + 1][0], pts[j + 1][1]); ctx.stroke();
-  }
-}
-
-function palette(p, rb) {
-  const [hue, S] = hexToHsl(p.accent);
-  const h2 = hue + p.shift;
-  if (rb.white) {
-    return {
-      rimHot: (a) => hsla(hue, 10, 96, a), rim: (a) => hsla(hue, 12, 80, a),
-      core: (a, k) => hsla(hue, 8, 10 * k, a), sheen: (a) => hsla(hue, 10, 42, a),
-      refract: (a) => hsla(h2, S * 0.6, 55, a), refractHot: (a) => hsla(h2, S * 0.5, 75, a),
-      spec: (a) => `rgba(255,255,255,${a.toFixed(3)})`,
-      refl: (a) => `rgba(245,248,250,${a.toFixed(3)})`, wall: (a) => hsla(hue, 10, 70, a),
-    };
-  }
-  return {
-    rimHot: (a) => hsla(hue, S, 80, a), rim: (a) => hsla(hue, Math.min(100, S * 1.1), 52, a),
-    core: (a, k) => hsla(hue, S, 12 * k, a), sheen: (a) => hsla(hue, S, 40, a),
-    refract: (a) => hsla(h2, S, 48, a), refractHot: (a) => hsla(h2, S, 70, a),
-    spec: (a) => `rgba(255,255,248,${a.toFixed(3)})`,
-    refl: (a) => hsla(hue, S * 0.3, 92, a), wall: (a) => hsla(hue, S, 45, a),
-  };
-}
-
-// `px` is device pixels per virtual unit, for hairlines that must stay at least one device pixel.
-function render(ctx, p, W, H, px) {
-  const [hue, S] = hexToHsl(p.accent);
-  const glow = p.glow / 100, fill = p.fill / 100;
-  const scene = buildScene(p, W, H, px);
-  const { focal } = scene;
-
-  ctx.save();
-  ctx.fillStyle = "#000";
-  ctx.fillRect(0, 0, W, H);
-
-  const bg = p.bgGlow / 100;
-  let g = ctx.createRadialGradient(focal[0], focal[1], 0, focal[0], focal[1], Math.max(W, H) * 0.8);
-  g.addColorStop(0, hsla(hue, S * 0.8, 16, 0.85 * bg));
-  g.addColorStop(0.5, hsla(hue, S * 0.8, 7, 0.45 * bg));
-  g.addColorStop(1, hsla(hue, S * 0.8, 2, 0));
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-  g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, "rgba(0,0,0,0.35)");
-  g.addColorStop(0.6, "rgba(0,0,0,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-
-  const layer = document.createElement("canvas");
-  layer.width = ctx.canvas.width; layer.height = ctx.canvas.height;
-  const lctx = layer.getContext("2d");
-  lctx.globalCompositeOperation = "lighter";
-  ctx.lineCap = "round";
-  for (const rb of scene.ribbons) {
-    const o = outline(rb), pal = palette(p, rb);
-    lctx.setTransform(1, 0, 0, 1, 0, 0);
-    lctx.clearRect(0, 0, layer.width, layer.height);
-    lctx.setTransform(ctx.getTransform());
-    drawGlass(lctx, rb, o, pal, fill);
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalCompositeOperation = "source-over";
-    ctx.drawImage(layer, 0, 0);
-    ctx.restore();
-    ctx.globalCompositeOperation = "lighter";
-    drawSpecular(ctx, rb, o, pal, H, px);
-  }
-
-  ctx.globalCompositeOperation = "source-over";
-  for (const tr of scene.trails) {
-    const c = tr.host.center;
-    for (const sq of tr.squares) {
-      const idx = Math.min(c.length - 2, Math.floor(sq.t * (c.length - 1)));
+      const sq = { t: start + (s / n) * len, size: size0 * lerp(1, 0.35, s / n) * r(0.6, 1.2), off: side * H * r(0.06, 0.1), tone: rnd() };
+      const u = frac(sq.t + p.bitsFlow * tau * host.dir);
+      const c = host.center, idx = Math.min(c.length - 2, Math.floor(u * (c.length - 1)));
       const a = c[idx], b = c[idx + 1];
       const m = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
       const x = a[0] - ((b[1] - a[1]) / m) * sq.off, y = a[1] + ((b[0] - a[0]) / m) * sq.off;
-      ctx.fillStyle = sq.tone < 0.4 ? hsla(hue, S, 55) : sq.tone < 0.7 ? "#f4f4f4" : sq.tone < 0.85 ? hsla(hue, S, 75) : "#000";
-      ctx.fillRect(x - sq.size / 2, y - sq.size / 2, sq.size, sq.size);
+      let alpha = smoothstep(0, 0.04, u) * (1 - smoothstep(0.96, 1, u));
+      if (p.swipe !== "off") alpha *= Math.min(1, host.env[idx] * 2);
+      if (alpha < 0.01) continue;
+      const col = tones[sq.tone < 0.4 ? 0 : sq.tone < 0.7 ? 1 : sq.tone < 0.85 ? 2 : 3];
+      const h2 = sq.size / 2, cr = col[0] * alpha, cg = col[1] * alpha, cb = col[2] * alpha;
+      const v = (vx, vy) => quads.push(vx, vy, cr, cg, cb, alpha);
+      v(x - h2, y - h2); v(x + h2, y - h2); v(x + h2, y + h2);
+      v(x - h2, y - h2); v(x + h2, y + h2); v(x - h2, y + h2);
     }
   }
 
-  if (glow > 0) bloom(ctx, glow);
-
-  g = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.hypot(W, H) * 0.6);
-  g.addColorStop(0, "rgba(0,0,0,0)");
-  g.addColorStop(1, "rgba(0,0,0,0.5)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-  ctx.restore();
-
-  // Grain is drawn in device pixels so it stays fine at any output size.
-  if (p.grain > 0) {
-    const tile = document.createElement("canvas");
-    tile.width = tile.height = 256;
-    const tctx = tile.getContext("2d");
-    const img = tctx.createImageData(256, 256);
-    for (let i = 0; i < img.data.length; i += 4) {
-      const v = scene.rnd() * 255;
-      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
-      img.data[i + 3] = 255;
-    }
-    tctx.putImageData(img, 0, 0);
-    ctx.save();
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalCompositeOperation = "overlay";
-    ctx.globalAlpha = (p.grain / 100) * 0.35;
-    ctx.fillStyle = ctx.createPattern(tile, "repeat");
-    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    ctx.restore();
-  }
+  return {
+    W, H, focal, ribbons, bits: new Float32Array(quads), specExtent, hair,
+    bg: [hsl(hue, S * 0.8, 16), hsl(hue, S * 0.8, 7), hsl(hue, S * 0.8, 2)], bgK: p.bgGlow / 100,
+    glow: p.glow / 100, grain: p.grain / 100,
+  };
 }
 
-// ---------- preview ----------
+// ---------- rendering ----------
 
-const preview = $("preview"), stage = $("stage");
-let queued = false;
+const R = window.StudioGL && StudioGL.create();
+if (!R) document.body.insertAdjacentHTML("afterbegin", '<p style="position:fixed;top:8px;left:316px;color:#f88;z-index:9">WebGL 2 is not available in this browser, so nothing can render.</p>');
 
-function drawPreview() {
-  queued = false;
-  const p = readSettings();
-  const { W, H, screens } = layout(p);
+// Draws one view of the wall into a 2D canvas, labels included. view: wall-pixel rect, out: 2D context.
+function renderView(p, lay, t, view, ctx2d) {
+  const ow = ctx2d.canvas.width, oh = ctx2d.canvas.height, px = ow / view[2];
+  const frame = buildFrame(p, lay.W, lay.H, px, t);
+  R.render(frame, view, ow, oh);
+  ctx2d.setTransform(1, 0, 0, 1, 0, 0);
+  ctx2d.drawImage(R.canvas, 0, 0, ow, oh);
+  ctx2d.setTransform(px, 0, 0, oh / view[3], -view[0] * px, -view[1] * (oh / view[3]));
+  window.StudioOverlay?.draw(ctx2d, lay.screens);
+  ctx2d.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+// ---------- preview + playback ----------
+
+const preview = $("preview"), stage = $("stage"), pctx = preview.getContext("2d");
+const clock = { playing: true, t: 0, last: performance.now() };
+let queued = false, current = null, busyExporting = false;
+
+function layoutPreview() {
+  const p = readSettings(), lay = layout(p);
   const box = stage.parentElement.getBoundingClientRect();
-  const fit = Math.min((box.width - 48) / W, (box.height - 48) / H);
-  const cssW = W * fit, cssH = H * fit, dpr = window.devicePixelRatio || 1;
-  preview.width = Math.round(cssW * dpr);
-  preview.height = Math.round(cssH * dpr);
+  const fit = Math.max(0.001, Math.min((box.width - 48) / lay.W, (box.height - 48) / lay.H));
+  const cssW = lay.W * fit, cssH = lay.H * fit, dpr = window.devicePixelRatio || 1;
+  const pw = Math.max(1, Math.round(cssW * dpr)), ph = Math.max(1, Math.round(cssH * dpr));
+  if (preview.width !== pw || preview.height !== ph) { preview.width = pw; preview.height = ph; }
   stage.style.width = cssW + "px";
-  const ctx = preview.getContext("2d");
-  const px = fit * dpr;
-  ctx.setTransform(px, 0, 0, px, 0, 0);
-  render(ctx, p, W, H, px);
-  ctx.setTransform(px, 0, 0, px, 0, 0);
-  window.StudioOverlay?.draw(ctx, screens);
 
   stage.querySelectorAll(".bezel").forEach((el) => el.remove());
   const bw = Math.max(2, p.gap * fit) + "px";
@@ -555,11 +496,42 @@ function drawPreview() {
     stage.appendChild(el);
   }
 
-  const n = screens.length, mp = ((p.w * p.h * n) / 1e6).toFixed(1);
+  const n = lay.screens.length, mp = ((p.w * p.h * n) / 1e6).toFixed(1);
   $("exportInfo").textContent = `${p.cols}×${p.rows} grid of ${p.w}×${p.h} · span ${p.w * p.cols}×${p.h * p.rows} (${mp} MP)`;
   syncNumbers();
   document.documentElement.style.setProperty("--accent", p.accent);
   history.replaceState(null, "", "#" + new URLSearchParams(Object.entries(p)).toString());
+  current = { p, lay };
+  clock.t = clock.t % p.loop;
+  updateKioskLinks();
+}
+
+function drawPreview() {
+  queued = false;
+  if (!R || !current || busyExporting) return;
+  renderView(current.p, current.lay, clock.t, [0, 0, current.lay.W, current.lay.H], pctx);
+  const L = current.p.loop;
+  if (document.activeElement !== $("scrub")) $("scrub").value = Math.round((clock.t / L) * 1000);
+  $("clock").textContent = `${clock.t.toFixed(1)} / ${L} s`;
+}
+
+function schedule() { if (!queued) { queued = true; requestAnimationFrame(drawPreview); } }
+function settingsChanged() { layoutPreview(); schedule(); }
+
+function tick(now) {
+  if (clock.playing && current && !busyExporting) {
+    clock.t = (clock.t + (now - clock.last) / 1000) % current.p.loop;
+    drawPreview();
+  }
+  clock.last = now;
+  requestAnimationFrame(tick);
+}
+
+function setPlaying(on) {
+  clock.playing = on;
+  clock.last = performance.now();
+  $("play").textContent = on ? "Pause" : "Play";
+  schedule();
 }
 
 // Each slider's <output> becomes a typable field. data-scale shows 0–1 sliders in percent.
@@ -594,66 +566,183 @@ function numberFields(root) {
   });
 }
 
-function schedule() { if (!queued) { queued = true; requestAnimationFrame(drawPreview); } }
+// ---------- stills ----------
 
-// ---------- export ----------
-
-function renderFull(p) {
-  const { W, H, screens } = layout(p);
-  const c = document.createElement("canvas");
-  c.width = W; c.height = H;
-  const cctx = c.getContext("2d");
-  render(cctx, p, W, H, 1);
-  cctx.setTransform(1, 0, 0, 1, 0, 0);
-  window.StudioOverlay?.draw(cctx, screens);
-  return { c, screens };
+function download(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
+const toBlob = (canvas) => new Promise((r) => canvas.toBlob(r, "image/png"));
 
-function download(canvas, name) {
-  return new Promise((done) => canvas.toBlob((blob) => {
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    a.click();
-    setTimeout(() => { URL.revokeObjectURL(a.href); done(); }, 500);
-  }, "image/png"));
-}
-
-function crop(src, s) {
+function screenCanvas(s) {
   const c = document.createElement("canvas");
   c.width = s.w; c.height = s.h;
-  c.getContext("2d").drawImage(src, s.x, s.y, s.w, s.h, 0, 0, s.w, s.h);
   return c;
 }
 
 async function exportPNG(each) {
-  const p = readSettings();
+  const p = readSettings(), lay = layout(p), t = clock.t;
+  busyExporting = true;
   const btns = [$("exportSpan"), $("exportEach")];
   btns.forEach((b) => (b.disabled = true));
   $("exportInfo").textContent = "Rendering…";
   await new Promise((r) => setTimeout(r, 30));
   try {
-    const { c, screens } = renderFull(p);
     const base = `studio-${p.seed}-${p.w}x${p.h}`;
-    if (each || screens.length === 1) {
-      for (const s of screens) await download(crop(c, s), screens.length > 1 ? `${base}-r${s.row + 1}c${s.col + 1}.png` : `${base}.png`);
+    if (each || lay.screens.length === 1) {
+      for (const s of lay.screens) {
+        const c = screenCanvas(s);
+        renderView(p, lay, t, [s.x, s.y, s.w, s.h], c.getContext("2d"));
+        download(await toBlob(c), lay.screens.length > 1 ? `${base}-r${s.row + 1}c${s.col + 1}.png` : `${base}.png`);
+      }
     } else {
       // Span file for OS "span" mode: screens butted together, bezel strips cut out.
       const span = document.createElement("canvas");
       span.width = p.w * p.cols; span.height = p.h * p.rows;
       const sctx = span.getContext("2d");
-      for (const s of screens) sctx.drawImage(c, s.x, s.y, s.w, s.h, s.col * p.w, s.row * p.h, s.w, s.h);
-      await download(span, `${base}-${p.cols}x${p.rows}.png`);
+      for (const s of lay.screens) {
+        const c = screenCanvas(s);
+        renderView(p, lay, t, [s.x, s.y, s.w, s.h], c.getContext("2d"));
+        sctx.drawImage(c, s.col * p.w, s.row * p.h);
+      }
+      download(await toBlob(span), `${base}-${p.cols}x${p.rows}.png`);
     }
   } finally {
+    busyExporting = false;
     btns.forEach((b) => (b.disabled = false));
-    schedule();
+    layoutPreview(); schedule();
   }
+}
+
+// ---------- video loop ----------
+
+let videoAbort = null;
+const even = (n) => n - (n % 2);
+
+async function exportVideo(span) {
+  const p = readSettings(), lay = layout(p);
+  const fps = p.fps, frames = Math.round(p.loop * fps), bitrate = p.vbr * 1e6;
+  const info = $("videoInfo"), bar = $("videoProgress");
+  if (!window.StudioMP4 || !StudioMP4.supported) { info.textContent = "This browser has no WebCodecs video encoder. Use Chrome or Edge."; return; }
+  // Each job is one output file: a screen, or the whole span with bezels cut out.
+  const jobs = span
+    ? [{ name: `${p.cols}x${p.rows}`, w: even(p.w * p.cols), h: even(p.h * p.rows), tiles: lay.screens.map((s) => ({ s, x: s.col * p.w, y: s.row * p.h })) }]
+    : lay.screens.map((s) => ({ name: lay.screens.length > 1 ? `r${s.row + 1}c${s.col + 1}` : "", w: even(s.w), h: even(s.h), tiles: [{ s, x: 0, y: 0 }] }));
+
+  busyExporting = true;
+  videoAbort = new AbortController();
+  for (const b of ["videoEach", "videoSpan", "exportSpan", "exportEach"]) $(b).disabled = true;
+  $("videoCancel").hidden = false; bar.hidden = false;
+  try {
+    for (let ji = 0; ji < jobs.length; ji++) {
+      const job = jobs[ji];
+      const config = await StudioMP4.pick(job.w, job.h, fps, bitrate);
+      if (!config) {
+        info.textContent = `No H.264 encoder here accepts ${job.w}×${job.h}.` + (span ? " Try MP4 per monitor." : "");
+        return;
+      }
+      const out = document.createElement("canvas");
+      out.width = job.w; out.height = job.h;
+      const octx = out.getContext("2d");
+      const tiles = job.tiles.map((tl) => ({ ...tl, c: screenCanvas(tl.s) }));
+      const t0 = performance.now();
+      const blob = await StudioMP4.encode({
+        config, fps, frames, signal: videoAbort.signal,
+        // Frame i is at t = i / fps; t = loop is never encoded, it is frame 0 again.
+        renderFrame(i) {
+          const t = i / fps;
+          for (const tl of tiles) {
+            renderView(p, lay, t, [tl.s.x, tl.s.y, tl.s.w, tl.s.h], tl.c.getContext("2d"));
+            octx.drawImage(tl.c, tl.x, tl.y);
+          }
+          return out;
+        },
+        onProgress(f) {
+          bar.value = (ji + f) / jobs.length;
+          const left = ((performance.now() - t0) / f) * (1 - f) / 1000;
+          info.textContent = `File ${ji + 1} of ${jobs.length}: ${Math.round(f * 100)}% · about ${Math.ceil(left)} s left · ${config.codec}`;
+        },
+      });
+      const name = `studio-${p.seed}-${p.loop}s-${fps}fps${job.name ? "-" + job.name : ""}.mp4`;
+      download(blob, name);
+      info.textContent = `Saved ${name} (${(blob.size / 1e6).toFixed(1)} MB, ${frames} frames).`;
+    }
+    if (jobs.length > 1) info.textContent = `Saved ${jobs.length} files, ${frames} frames each.`;
+  } catch (e) {
+    info.textContent = e.name === "AbortError" ? "Cancelled." : `Export failed: ${e.message}`;
+  } finally {
+    busyExporting = false;
+    videoAbort = null;
+    for (const b of ["videoEach", "videoSpan", "exportSpan", "exportEach"]) $(b).disabled = false;
+    $("videoCancel").hidden = true; bar.hidden = true;
+    layoutPreview(); schedule();
+  }
+}
+
+// ---------- kiosk ----------
+// #…&kiosk=N plays screen N (reading order) full window. Time comes from the system clock, so every
+// display PC on the wall is in the same place in the loop.
+
+const b64 = (o) => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const unb64 = (s) => JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g, "+").replace(/_/g, "/")))));
+
+function kioskUrl(i) {
+  const p = readSettings(), q = new URLSearchParams(Object.entries(p));
+  q.set("kiosk", i + 1);
+  const st = window.StudioOverlay?.getState();
+  if (st && st.text.on) q.set("lbl", b64(st.text));
+  return location.origin + location.pathname + "#" + q.toString();
+}
+
+function updateKioskLinks() {
+  const host = $("kioskLinks"), lay = current.lay;
+  host.replaceChildren(...lay.screens.map((s, i) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    const a = document.createElement("a");
+    a.href = kioskUrl(i); a.target = "_blank"; a.rel = "noopener";
+    a.textContent = `Screen ${i + 1} (row ${s.row + 1}, col ${s.col + 1})`;
+    const b = document.createElement("button");
+    b.textContent = "Copy link";
+    b.onclick = async () => { try { await navigator.clipboard.writeText(kioskUrl(i)); b.textContent = "Copied"; } catch { b.textContent = "Copy failed"; } setTimeout(() => (b.textContent = "Copy link"), 1500); };
+    row.append(a, b);
+    return row;
+  }));
+}
+
+function runKiosk(index, params) {
+  document.body.className = "kiosk";
+  const cv = document.createElement("canvas");
+  cv.id = "kioskCanvas";
+  const hint = document.createElement("div");
+  hint.id = "kioskHint";
+  hint.textContent = "Double-click for full screen";
+  document.body.append(cv, hint);
+  setTimeout(() => (hint.style.opacity = 0), 4000);
+  addEventListener("dblclick", () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); });
+  if (params.has("lbl")) { try { window.StudioOverlay?.useText(unb64(params.get("lbl")), readSettings().accent); } catch { /* bad link: no label */ } }
+  const ctx = cv.getContext("2d");
+  const p = readSettings(), lay = layout(p);
+  const s = lay.screens[clamp(index - 1, 0, lay.screens.length - 1)];
+  function frame() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    // Cover: keep the screen's aspect and crop the window's extra, centred.
+    const k = Math.max(w / s.w, h / s.h), vw = w / k, vh = h / k;
+    const view = [s.x + (s.w - vw) / 2, s.y + (s.h - vh) / 2, vw, vh];
+    renderView(p, lay, (Date.now() / 1000) % p.loop, view, ctx);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 }
 
 // ---------- wiring ----------
 
-function newSeed() { $("seed").value = Math.floor(Math.random() * 1e9); schedule(); }
+function newSeed() { $("seed").value = Math.floor(Math.random() * 1e9); settingsChanged(); }
 
 function shuffle() {
   for (const id of ["busy", "fill", "spread", "curl", "chaos", "twist", "glow", "whites", "bgGlow"]) $(id).value = Math.round(Math.random() * 100);
@@ -661,43 +750,70 @@ function shuffle() {
   newSeed();
 }
 
+function shuffleMotion() {
+  const pickInt = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+  for (const id of ["flow", "drift", "breathe", "wander"]) $(id).value = pickInt(0, 70);
+  $("swipeLen").value = pickInt(40, 130);
+  $("speed").value = pickInt(1, 3);
+  for (const id of ["roll", "sheen", "bitsFlow"]) $(id).value = pickInt(-2, 2);
+  $("swipe").value = ["off", "off", "ltr", "rtl", "alt", "random"][pickInt(0, 5)];
+  settingsChanged();
+}
+
 PALETTES.forEach((hex) => {
   const b = document.createElement("button");
   b.className = "swatch"; b.style.background = hex; b.title = hex; b.setAttribute("aria-label", "Accent " + hex);
-  b.onclick = () => { $("accent").value = hex; schedule(); };
+  b.onclick = () => { $("accent").value = hex; settingsChanged(); };
   $("swatches").appendChild(b);
 });
 
 const params = new URLSearchParams(location.hash.slice(1));
 for (const [k, v] of params) {
   if (k === "res") $("res").value = v;
-  else if (k === "w" || k === "h" || ctrlIds.includes(k)) $(k).value = v;
+  else if ((k === "w" || k === "h" || ctrlIds.includes(k)) && $(k)) $(k).value = v;
 }
 if (!params.has("seed")) $("seed").value = Math.floor(Math.random() * 1e9);
 $("customRes").hidden = $("res").value !== "custom";
 
-document.querySelectorAll("input, select").forEach((el) => el.addEventListener("input", () => {
-  $("customRes").hidden = $("res").value !== "custom";
-  schedule();
-}));
-$("reseed").onclick = newSeed;
-$("shuffle").onclick = shuffle;
-$("exportSpan").onclick = () => exportPNG(false);
-$("exportEach").onclick = () => exportPNG(true);
-addEventListener("resize", schedule);
-addEventListener("keydown", (e) => {
-  if (e.target.matches("input[type=number], select")) return;
-  if (e.code === "Space") { e.preventDefault(); newSeed(); }
-  if (e.key === "s" || e.key === "S") shuffle();
-});
-window.StudioOverlay?.mount($("overlayPanel"), {
-  onChange: schedule,
-  getPreview: () => ({ canvas: preview, settings: readSettings(), layout: layout(readSettings()) }),
-});
-numberFields(document.querySelector("aside"));
-drawPreview();
-// Canvas text drawn before the web font finishes loading uses the fallback; redraw once it has.
-document.fonts?.ready.then(schedule);
+if (params.has("kiosk") && R) {
+  runKiosk(+params.get("kiosk") || 1, params);
+} else {
+  document.querySelectorAll("aside input, aside select").forEach((el) => {
+    if (el.id === "scrub" || el.closest("#overlayPanel")) return;
+    el.addEventListener("input", () => { $("customRes").hidden = $("res").value !== "custom"; settingsChanged(); });
+  });
+  $("scrub").addEventListener("input", () => {
+    if (current) clock.t = ($("scrub").value / 1000) * current.p.loop;
+    setPlaying(false);
+  });
+  $("play").onclick = () => setPlaying(!clock.playing);
+  $("reseed").onclick = newSeed;
+  $("shuffle").onclick = shuffle;
+  $("shuffleMotion").onclick = shuffleMotion;
+  $("exportSpan").onclick = () => exportPNG(false);
+  $("exportEach").onclick = () => exportPNG(true);
+  $("videoEach").onclick = () => exportVideo(false);
+  $("videoSpan").onclick = () => exportVideo(true);
+  $("videoCancel").onclick = () => videoAbort?.abort();
+  addEventListener("resize", settingsChanged);
+  addEventListener("keydown", (e) => {
+    if (e.target.matches("input[type=number], input[type=text], select")) return;
+    if (e.code === "Space") { e.preventDefault(); newSeed(); }
+    if (e.key === "s" || e.key === "S") shuffle();
+    if (e.key === "m" || e.key === "M") shuffleMotion();
+    if (e.key === "p" || e.key === "P") setPlaying(!clock.playing);
+  });
+  window.StudioOverlay?.mount($("overlayPanel"), {
+    onChange: () => { if (current) updateKioskLinks(); schedule(); },
+    getPreview: () => ({ canvas: preview, settings: readSettings(), layout: layout(readSettings()) }),
+  });
+  numberFields(document.querySelector("aside"));
+  layoutPreview();
+  drawPreview();
+  requestAnimationFrame(tick);
+  // Canvas text drawn before the web font finishes loading uses the fallback; redraw once it has.
+  document.fonts?.ready.then(schedule);
+}
 </script>
 </body>
 </html>

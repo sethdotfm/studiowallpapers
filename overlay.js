@@ -21,6 +21,7 @@
   let previewCanvas = null;
   let snap = null, snapScreen = null; // clean crop of screen 0, taken before overlays are drawn
   let active = "text";
+  let headless = null; // { accent } when driven from a kiosk URL with no panel mounted
   const scratch = document.createElement("canvas").getContext("2d");
 
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -97,6 +98,7 @@
   }
 
   function accentColour() {
+    if (headless) return headless.accent;
     try { return cb.getPreview().settings.accent || "#7fd321"; } catch { return "#7fd321"; }
   }
 
@@ -113,7 +115,7 @@
       c.clearRect(0, 0, sw, sh);
       c.drawImage(ctx.canvas, Math.round(s.x * k), Math.round(s.y * k), sw, sh, 0, 0, sw, sh);
     }
-    if ((S.text.on || S.image.on) && host) {
+    if ((S.text.on || S.image.on) && (host || headless)) {
       const accent = S.text.useAccent ? accentColour() : "#fff";
       ordered.forEach((s, i) => {
         ctx.save();
@@ -399,5 +401,19 @@
     load().then(() => { syncUI(); refreshEditor(); cb.onChange && cb.onChange(); });
   }
 
-  window.StudioOverlay = { mount, draw, loadImage, getState: () => JSON.parse(JSON.stringify(S)), labelFor };
+  // Kiosk pages carry the text layer in the URL; images stay on the machine that loaded them.
+  function useText(text, accent) {
+    headless = { accent: accent || "#7fd321" };
+    if (text && typeof text === "object") {
+      for (const k of Object.keys(DEF.text)) {
+        if (!(k in text)) continue;
+        const d = DEF.text[k];
+        if (typeof d === "number") S.text[k] = num(text[k], d, k);
+        else if (typeof d === "boolean") S.text[k] = !!text[k];
+        else if (typeof text[k] === "string") S.text[k] = text[k];
+      }
+    }
+  }
+
+  window.StudioOverlay = { mount, draw, loadImage, useText, getState: () => JSON.parse(JSON.stringify(S)), labelFor };
 })();

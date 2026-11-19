@@ -1,6 +1,6 @@
 # Studio Wallpapers
 
-A single-page generator for dark, glowing ribbon wallpapers. Open `index.html` in a browser. It has no build step and no dependencies.
+A single-page generator for dark, glowing glass-ribbon wallpapers and seamless video loops, rendered on the GPU with WebGL 2. It has no build step and no dependencies. Use Chrome or Edge; video export needs WebCodecs.
 
 ```bash
 python3 serve.py
@@ -15,8 +15,26 @@ Then open http://localhost:8931, or this machine's IP on port 8931 from another 
 - Busyness sets the ribbon count. Fill sets how solid the glass core is. Spread fans the ribbons out from the point where they cross. Curl bends them. Chaos adds per-ribbon jitter; at 0 the ribbons stay evenly spaced. Twist turns each ribbon about its spine, so it narrows and flips to its darker back face.
 - Edge hue shifts the colour of the far bevel away from the accent (positive goes toward yellow for green). Bloom adds a soft glow over the whole image. Pixel bits adds square trails along some ribbons. Grain adds film noise.
 - Every slider has a number field you can type into. Label sizes and positions are in percent of the screen.
-- The seed fixes the layout. Space picks a new seed and S shuffles every slider.
+- The seed fixes the layout. Space picks a new seed and S shuffles the shape sliders.
 - The URL hash holds all settings, so a link reproduces the same image.
+
+## Motion
+
+The preview plays continuously. Every movement repeats exactly once per loop, so a loop of any length plays forever with no jump at the wrap.
+
+- Loop is the length in seconds. Speed is how many times the main motions cycle per loop.
+- Swipe reveals each ribbon as a travelling window: left to right, right to left, alternating, or random per ribbon. Swipe length sets how much of the ribbon shows at once.
+- Flow sends waves along the ribbons in the swipe direction. Drift slowly sways the ends and the bow. Breathe swells and thins the width. Wander adds uneven per-ribbon movement.
+- Roll turns the twist, Sheen slides the reflections and Bits flow moves the pixel bits, each in whole cycles per loop (negative reverses).
+- Shuffle motion (M) randomises these. P plays or pauses; the scrubber picks a moment for stills.
+
+## Video loop
+
+MP4 per monitor encodes one H.264 file per screen; Span MP4 encodes the whole wall in one file with the bezels cut out. Frames are rendered one at a time at exact loop positions, so a 20 s loop at 30 fps is exactly 600 frames and repeats cleanly in any player set to loop. Hardware H.264 encoders usually stop at about 4096 px wide, so large spans may be refused; per-monitor files are the reliable path.
+
+## Kiosk
+
+Each screen has a kiosk link that plays that screen full window. Open one link per display PC (use this machine's network address, not localhost) and double-click for full screen. All PCs take their position in the loop from the system clock, so the wall stays in step as long as their clocks are synced. Text labels travel in the link; uploaded images don't.
 
 ## Labels
 
@@ -24,4 +42,4 @@ The Labels panel puts an identifier on every screen. Turn on Text label, set Ser
 
 ## Export
 
-"Download span PNG" writes one image the size of the whole grid with the bezels removed, for an OS "span" wallpaper mode. "One PNG per monitor" writes one file per screen, named by row and column.
+Stills are taken at the scrubber position. "Download span PNG" writes one image the size of the whole grid with the bezels removed, for an OS "span" wallpaper mode. "One PNG per monitor" writes one file per screen, named by row and column.
