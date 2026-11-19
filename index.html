@@ -20,11 +20,13 @@
   :root { --pb-font: "Studio Segoe", "Segoe UI", "IBM Plex Sans", system-ui, sans-serif; }
   /* UI accent follows the wallpaper accent (--accent, set from script). Lightness is clamped so
      accent text keeps contrast on Patchbay surfaces and with --pb-text-on-accent. */
-  :root {
-    --accent: #107c10;
-    --pb-accent: light-dark(oklch(from var(--accent) min(l, 0.48) c h), oklch(from var(--accent) max(l, 0.74) c h));
-    --pb-accent-hover: light-dark(oklch(from var(--pb-accent) calc(l - 0.07) c h), oklch(from var(--pb-accent) calc(l + 0.07) c h));
-    --pb-accent-wash: color-mix(in srgb, var(--pb-accent) 13%, transparent);
+  @supports (color: oklch(from red l c h)) {
+    :root {
+      --accent: #107c10;
+      --pb-accent: light-dark(oklch(from var(--accent) min(l, 0.48) c h), oklch(from var(--accent) max(l, 0.74) c h));
+      --pb-accent-hover: light-dark(oklch(from var(--pb-accent) calc(l - 0.07) c h), oklch(from var(--pb-accent) calc(l + 0.07) c h));
+      --pb-accent-wash: color-mix(in srgb, var(--pb-accent) 13%, transparent);
+    }
   }
   html, body { height: 100%; margin: 0; }
   .app { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; height: 100%; }
