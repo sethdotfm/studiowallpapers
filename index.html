@@ -180,6 +180,7 @@
   <fieldset>
     <legend>Kiosk</legend>
     <p class="note">Open one link per display PC. Each plays its own screen of the wall, in step with the others by the system clock. Text labels travel in the link; images don't.</p>
+    <p class="note" id="kioskWarn" hidden></p>
     <div class="links" id="kioskLinks"></div>
   </fieldset>
 
@@ -676,7 +677,8 @@ async function exportVideo(span) {
   } finally {
     busyExporting = false;
     videoAbort = null;
-    for (const b of ["videoEach", "videoSpan", "exportSpan", "exportEach"]) $(b).disabled = false;
+    for (const b of ["exportSpan", "exportEach"]) $(b).disabled = false;
+    for (const b of ["videoEach", "videoSpan"]) $(b).disabled = !isSecureContext;
     $("videoCancel").hidden = true; bar.hidden = true;
     layoutPreview(); schedule();
   }
@@ -689,16 +691,23 @@ async function exportVideo(span) {
 const b64 = (o) => btoa(unescape(encodeURIComponent(JSON.stringify(o)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const unb64 = (s) => JSON.parse(decodeURIComponent(escape(atob(s.replace(/-/g, "+").replace(/_/g, "/")))));
 
+// On the server machine, localhost links would only work there; serve.py reports the network address.
+let lanOrigin = null;
+const onLocalhost = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+if (onLocalhost) fetch("/__lan").then((r) => r.json()).then((j) => { if (j.ip) { lanOrigin = `http://${j.ip}:${location.port}`; if (current) updateKioskLinks(); } }).catch(() => {});
+
 function kioskUrl(i) {
   const p = readSettings(), q = new URLSearchParams(Object.entries(p));
   q.set("kiosk", i + 1);
   const st = window.StudioOverlay?.getState();
   if (st && st.text.on) q.set("lbl", b64(st.text));
-  return location.origin + location.pathname + "#" + q.toString();
+  return (lanOrigin || location.origin) + location.pathname + "#" + q.toString();
 }
 
 function updateKioskLinks() {
   const host = $("kioskLinks"), lay = current.lay;
+  $("kioskWarn").hidden = !(onLocalhost && !lanOrigin);
+  $("kioskWarn").textContent = "These links use localhost, which only works on this machine. Open this page by its network address, or start it with serve.py, to get links for other PCs.";
   host.replaceChildren(...lay.screens.map((s, i) => {
     const row = document.createElement("div");
     row.className = "row";
@@ -707,8 +716,15 @@ function updateKioskLinks() {
     a.textContent = `Screen ${i + 1} (row ${s.row + 1}, col ${s.col + 1})`;
     const b = document.createElement("button");
     b.textContent = "Copy link";
-    b.onclick = async () => { try { await navigator.clipboard.writeText(kioskUrl(i)); b.textContent = "Copied"; } catch { b.textContent = "Copy failed"; } setTimeout(() => (b.textContent = "Copy link"), 1500); };
-    row.append(a, b);
+    // The clipboard API needs a secure page; over plain http on the LAN, show the link selected instead.
+    const field = document.createElement("input");
+    field.readOnly = true; field.hidden = true; field.style.width = "100%";
+    field.setAttribute("aria-label", `Kiosk link for screen ${i + 1}`);
+    b.onclick = async () => {
+      try { await navigator.clipboard.writeText(kioskUrl(i)); b.textContent = "Copied"; setTimeout(() => (b.textContent = "Copy link"), 1500); }
+      catch { field.value = kioskUrl(i); field.hidden = false; field.focus(); field.select(); }
+    };
+    row.append(a, b, field);
     return row;
   }));
 }
@@ -808,6 +824,13 @@ if (params.has("kiosk") && R) {
     getPreview: () => ({ canvas: preview, settings: readSettings(), layout: layout(readSettings()) }),
   });
   numberFields(document.querySelector("aside"));
+  // WebCodecs exists only on secure pages: localhost or https, not a plain-http LAN address.
+  if (!isSecureContext || !window.StudioMP4?.supported) {
+    for (const b of ["videoEach", "videoSpan"]) $(b).disabled = true;
+    $("videoInfo").textContent = !isSecureContext
+      ? "Video export needs a secure page. Open this as http://localhost:8931 on the machine running serve.py, or serve it over https. Chrome and Edge can also allow this address under the flag unsafely-treat-insecure-origin-as-secure."
+      : "This browser has no WebCodecs video encoder. Use Chrome or Edge.";
+  }
   layoutPreview();
   drawPreview();
   requestAnimationFrame(tick);

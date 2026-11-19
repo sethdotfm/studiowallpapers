@@ -30,11 +30,11 @@ The preview plays continuously. Every movement repeats exactly once per loop, so
 
 ## Video loop
 
-MP4 per monitor encodes one H.264 file per screen; Span MP4 encodes the whole wall in one file with the bezels cut out. Frames are rendered one at a time at exact loop positions, so a 20 s loop at 30 fps is exactly 600 frames and repeats cleanly in any player set to loop. Hardware H.264 encoders usually stop at about 4096 px wide, so large spans may be refused; per-monitor files are the reliable path.
+MP4 per monitor encodes one H.264 file per screen; Span MP4 encodes the whole wall in one file with the bezels cut out. Frames are rendered one at a time at exact loop positions, so a 20 s loop at 30 fps is exactly 600 frames and repeats cleanly in any player set to loop. Hardware H.264 encoders cap the frame size (on this Mac 5760 × 1080 works and 7680 × 2160 doesn't), so large spans may be refused; per-monitor files are the reliable path. Browsers only expose the video encoder on secure pages, so export from http://localhost:8931 on the machine running the server, or over https; a plain http network address can play and save stills but not encode video.
 
 ## Kiosk
 
-Each screen has a kiosk link that plays that screen full window. Open one link per display PC (use this machine's network address, not localhost) and double-click for full screen. All PCs take their position in the loop from the system clock, so the wall stays in step as long as their clocks are synced. Text labels travel in the link; uploaded images don't.
+Each screen has a kiosk link that plays that screen full window. Open one link per display PC and double-click for full screen. When the page runs from `serve.py`, the links use this machine's network address even if you opened it as localhost. All PCs take their position in the loop from the system clock, so the wall stays in step as long as their clocks are synced. Text labels travel in the link; uploaded images don't.
 
 ## Labels
 
