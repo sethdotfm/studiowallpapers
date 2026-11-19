@@ -1,4 +1,4 @@
-/* Label editor. Layout only; colours and sizes come from Patchbay tokens. */
+/* Label editor. Layout only; colors and sizes come from Patchbay tokens. */
 #overlayPanel .ov { display: grid; gap: var(--pb-space-8); }
 #overlayPanel .ov .pb-section { display: grid; gap: var(--pb-space-5); }
 #overlayPanel .pb-form { --pb-label-w: 6.5rem; }
