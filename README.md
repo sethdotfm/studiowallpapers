@@ -2,6 +2,8 @@
 
 A single-page generator for dark, glowing glass-ribbon wallpapers and seamless video loops, rendered on the GPU with WebGL 2. It has no build step and no dependencies. Use Chrome or Edge; video export needs WebCodecs.
 
+The interface is built with [Patchbay](https://github.com/sethdotfm/patchbay), vendored in `patchbay/` (version in `patchbay/VERSION`). To update it, copy `css/`, `fonts/`, `icons/` and `VERSION` from a Patchbay release into `patchbay/`. The UI text uses Segoe UI when it's installed and Patchbay's IBM Plex Sans otherwise; `--pb-font` in `index.html` sets this. The toolbar's Light mode button switches the interface theme; the wallpaper is unaffected.
+
 ```bash
 python3 serve.py
 ```

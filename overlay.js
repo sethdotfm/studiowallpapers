@@ -224,43 +224,51 @@
     ["image", "x", "Position X", 0, 1, 0.001, pct],
     ["image", "y", "Position Y", 0, 1, 0.001, pct],
   ];
-  const rangeHtml = (layer) => RANGES.filter((r) => r[0] === layer).map(([l, k, label, min, max, step]) =>
-    `<label>${label}<input type="range" data-l="${l}" data-k="${k}" min="${min}" max="${max}" step="${step}" data-scale="${max <= 1 && k !== "spacing" ? 100 : 1}"><output></output></label>`).join("");
+  // Rows for a pb-form; the page turns each range's <output> into a number field.
+  const rangeHtml = (layer) => RANGES.filter((r) => r[0] === layer).map(([l, k, label, min, max, step]) => `
+      <span class="pb-form__label">${label}</span>
+      <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" aria-label="${label}" data-l="${l}" data-k="${k}" min="${min}" max="${max}" step="${step}" data-scale="${max <= 1 && k !== "spacing" ? 100 : 1}"><output></output></div>`).join("");
 
   function build() {
     host.insertAdjacentHTML("beforeend", `
 <div class="ov">
   <canvas class="ov__edit" tabindex="0" aria-label="Label position on screen 1. Drag, or use arrow keys."></canvas>
-  <p class="note">Drag in the preview of screen 1. Every screen gets its own label in the same spot.</p>
+  <p class="pb-note">Drag in the preview of screen 1. Every screen gets its own label in the same spot.</p>
 
-  <div class="ov__layer">
-    <label class="ov__toggle"><input type="checkbox" data-l="text" data-k="on"> Text label</label>
-    <label class="wide">Series <input type="text" data-l="text" data-k="series" maxlength="60" autocomplete="off" spellcheck="false" placeholder="UTILITY PC"></label>
-    <label class="wide">Modifier
-      <select data-l="text" data-k="style">
+  <section class="pb-section">
+    <label class="pb-check"><input type="checkbox" role="switch" class="pb-switch__input" data-l="text" data-k="on"><span class="pb-check__label">Text label</span></label>
+    <div class="pb-form">
+      <label class="pb-form__label" for="ov-series">Series</label>
+      <div class="pb-form__field"><input type="text" class="pb-input" id="ov-series" data-l="text" data-k="series" maxlength="60" autocomplete="off" spellcheck="false" placeholder="UTILITY PC"></div>
+      <label class="pb-form__label" for="ov-style">Modifier</label>
+      <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="ov-style" data-l="text" data-k="style">
         <option value="num">Numbers 1, 2, 3…</option>
         <option value="alpha">Letters A, B, C…</option>
         <option value="none">None</option>
-      </select>
-    </label>
-    <label class="wide">Start at <input type="text" data-l="text" data-k="start" maxlength="3" autocomplete="off" spellcheck="false"></label>
-    ${rangeHtml("text")}
-    <label class="wide">Align
-      <select data-l="text" data-k="align"><option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option></select>
-    </label>
-    <div class="ov__row"><span>Colour</span><span class="ov__colour"><input type="color" data-l="text" data-k="color" aria-label="Text colour"><label class="ov__toggle"><input type="checkbox" data-l="text" data-k="useAccent"> Use accent</label></span></div>
-    <div class="row"><button type="button" data-act="reset-text">Reset text</button></div>
-  </div>
-
-  <div class="ov__layer">
-    <label class="ov__toggle"><input type="checkbox" data-l="image" data-k="on"> Image (PNG or SVG)</label>
-    <div class="row">
-      <input type="file" class="ov__file" accept="image/png,image/svg+xml" aria-label="Upload PNG or SVG">
-      <button type="button" data-act="clear-image">Remove</button>
+      </select></span></div>
+      <label class="pb-form__label" for="ov-start">Start at</label>
+      <div class="pb-form__field"><input type="text" class="pb-input pb-w-sm" id="ov-start" data-l="text" data-k="start" maxlength="3" autocomplete="off" spellcheck="false"></div>
+      ${rangeHtml("text")}
+      <label class="pb-form__label" for="ov-align">Align</label>
+      <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="ov-align" data-l="text" data-k="align"><option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option></select></span></div>
+      <label class="pb-form__label" for="ov-color">Colour</label>
+      <div class="pb-form__field pb-row">
+        <input type="color" class="pb-input" id="ov-color" data-l="text" data-k="color">
+        <label class="pb-check"><input type="checkbox" class="pb-check__input" data-l="text" data-k="useAccent"><span class="pb-check__label">Use accent</span></label>
+      </div>
     </div>
-    <p class="note ov__name"></p>
-    ${rangeHtml("image")}
-  </div>
+    <div class="pb-row"><button type="button" class="pb-btn pb-btn--sm" data-act="reset-text">Reset text</button></div>
+  </section>
+
+  <section class="pb-section">
+    <label class="pb-check"><input type="checkbox" role="switch" class="pb-switch__input" data-l="image" data-k="on"><span class="pb-check__label">Image (PNG or SVG)</span></label>
+    <div class="pb-row pb-row--wrap">
+      <input type="file" class="ov__file" accept="image/png,image/svg+xml" aria-label="Upload PNG or SVG">
+      <button type="button" class="pb-btn pb-btn--sm" data-act="clear-image">Remove</button>
+    </div>
+    <p class="pb-note ov__name"></p>
+    <div class="pb-form">${rangeHtml("image")}</div>
+  </section>
 </div>`);
     el.canvas = host.querySelector(".ov__edit");
     el.file = host.querySelector(".ov__file");
