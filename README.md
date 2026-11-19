@@ -17,7 +17,7 @@ Then open http://localhost:8931, or this machine's IP on port 8931 from another 
 - Busyness sets the ribbon count. Fill sets how solid the glass core is. Spread fans the ribbons out from the point where they cross. Curl bends them. Chaos adds per-ribbon jitter; at 0 the ribbons stay evenly spaced. Twist turns each ribbon about its spine, so it narrows and flips to its darker back face.
 - Edge hue shifts the colour of the far bevel away from the accent (positive goes toward yellow for green). Bloom adds a soft glow over the whole image. Pixel bits adds square trails along some ribbons. Grain adds film noise.
 - Every slider has a number field you can type into. Label sizes and positions are in percent of the screen.
-- The seed fixes the layout. Space picks a new seed and S shuffles the shape sliders.
+- The seed fixes the layout. N picks a new seed and S shuffles the shape sliders.
 - The URL hash holds all settings, so a link reproduces the same image.
 
 ## Motion
@@ -30,7 +30,7 @@ The preview plays continuously. Every movement repeats exactly once per loop, so
 - Roll turns the twist and Bits flow moves the pixel bits (negative reverses). Shimmer slides the reflections, with Shimmer dir choosing left to right, right to left, the swipe direction, or random per ribbon. All are cycles per loop in quarter steps.
 - A seamless loop needs every motion to finish whole cycles, so quarter-step rates may need 2 to 4 passes of the loop to line up. The page then shows the real repeat length, and video exports use it.
 - The top-right corner shows the browser's frame rate and the render time per frame. In kiosk mode press F, or add `&meter=1` to the link, to show it.
-- Shuffle motion (M) randomises these. P plays or pauses; the scrubber picks a moment for stills.
+- Shuffle motion (M) randomises these. Space or P plays or pauses; the scrubber picks a moment for stills.
 
 ## Video loop
 
