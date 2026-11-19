@@ -44,9 +44,15 @@ vec4 ramp(float x) {
 void main() {
   float e = vEnv;
   if (e < 0.003) discard;
+  // Analytic edge coverage. The strip runs about a pixel past each edge (across < 0 or > 1 there), so
+  // the edge fades by its exact distance in pixels; 4x MSAA alone steps visibly on shallow bright rims.
+  float edgePx = min(vAcross, 1.0 - vAcross) / max(fwidth(vAcross), 1e-6);
+  float cov = clamp(edgePx + 0.5, 0.0, 1.0);
+  if (cov <= 0.0) discard;
+  float ac = clamp(vAcross, 0.0, 1.0);
   bool front = cos(vPh) >= 0.0;
   float lit = front ? 1.0 : 0.7;
-  float x = front ? vAcross : 1.0 - vAcross;
+  float x = front ? ac : 1.0 - ac;
   float f = vEdge * (front ? 1.0 : -1.0), af = min(1.0, abs(f));
   float ea = e * uBody;
   vec4 col;
@@ -74,7 +80,7 @@ void main() {
     P[12] = 1.0;  C[12] = vec4(cRefractHot, e * lit);
     col = ramp(u);
   }
-  col.a = clamp(col.a, 0.0, 1.0);
+  col.a = clamp(col.a, 0.0, 1.0) * cov;
   o = vec4(col.rgb * col.a, col.a);
 }`;
 
@@ -96,11 +102,20 @@ void main() {
 
   const VS_BITS = VS_VIEW + `
 layout(location = 0) in vec2 aPos;
-layout(location = 1) in vec4 aC;
+layout(location = 1) in vec2 aL;
+layout(location = 2) in vec4 aC;
+out vec2 vL;
 out vec4 vC;
-void main() { gl_Position = place(aPos); vC = aC; }`;
+void main() { gl_Position = place(aPos); vL = aL; vC = aC; }`;
 
-  const FS_BITS = HEAD + `in vec4 vC; out vec4 o; void main() { o = vC; }`;
+  // vL is position in half-sizes (edges at ±1, quad padded past them), so moving squares slide
+  // smoothly instead of snapping a whole pixel at a time.
+  const FS_BITS = HEAD + `in vec2 vL; in vec4 vC; out vec4 o;
+void main() {
+  vec2 d = (1.0 - abs(vL)) / max(fwidth(vL), vec2(1e-6));
+  vec2 c = clamp(d + 0.5, 0.0, 1.0);
+  o = vC * c.x * c.y;
+}`;
 
   const VS_FULL = `#version 300 es
 out vec2 vT;
@@ -221,7 +236,7 @@ void main() {
       vaos = {}; vbos = {}; T = {};
       vao("ribbon", [2, 4, 1]);
       vao("spec", [2, 2]);
-      vao("bits", [2, 4]);
+      vao("bits", [2, 2, 4]);
       vaos.empty = gl.createVertexArray();
     }
     init();
@@ -324,7 +339,7 @@ void main() {
         gl.bindVertexArray(vaos.bits);
         gl.bindBuffer(gl.ARRAY_BUFFER, vbos.bits);
         gl.bufferData(gl.ARRAY_BUFFER, frame.bits, gl.STREAM_DRAW);
-        gl.drawArrays(gl.TRIANGLES, 0, frame.bits.length / 6);
+        gl.drawArrays(gl.TRIANGLES, 0, frame.bits.length / 8);
       }
       gl.disable(gl.BLEND);
     }
