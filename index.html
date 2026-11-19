@@ -18,11 +18,21 @@
   /* Bundled variable Open Sans for labels (fonts/OFL.txt): one file, every weight from 300 to 800. */
   @font-face { font-family: "Studio Open Sans"; src: url("fonts/OpenSans-Variable.ttf") format("truetype"); font-weight: 300 800; font-stretch: 75% 100%; font-display: block; }
   :root { --pb-font: "Studio Segoe", "Segoe UI", "IBM Plex Sans", system-ui, sans-serif; }
+  /* UI accent follows the wallpaper accent (--accent, set from script). Lightness is clamped so
+     accent text keeps contrast on Patchbay surfaces and with --pb-text-on-accent. */
+  @supports (color: oklch(from red l c h)) {
+    :root {
+      --accent: #107c10;
+      --pb-accent: light-dark(oklch(from var(--accent) min(l, 0.48) c h), oklch(from var(--accent) max(l, 0.74) c h));
+      --pb-accent-hover: light-dark(oklch(from var(--pb-accent) calc(l - 0.07) c h), oklch(from var(--pb-accent) calc(l + 0.07) c h));
+      --pb-accent-wash: color-mix(in srgb, var(--pb-accent) 13%, transparent);
+    }
+  }
   html, body { height: 100%; margin: 0; }
   .app { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; height: 100%; }
   .app-body { display: grid; grid-template-columns: 24rem 1fr; min-height: 0; }
   .app-side { display: flex; flex-direction: column; min-height: 0; border-right: var(--pb-border-w) solid var(--pb-edge); }
-  .app-side > .pb-tabs { flex: none; }
+  .app-side > .pb-tabs { flex: none; justify-content: safe center; }
   .app-panels { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
   .app-panel { gap: var(--pb-space-8); padding: var(--pb-space-7) var(--pb-space-6) var(--pb-space-9); }
   .app-panel.active { display: grid; } /* Patchbay hides inactive panels; only the shown one is a grid */
@@ -35,11 +45,13 @@
   .bezel { position: absolute; top: 0; bottom: 0; background: var(--pb-surface-sunken); }
   .bezel--h { top: auto; bottom: auto; left: 0; right: 0; }
   .app-hint { position: absolute; left: var(--pb-space-7); bottom: var(--pb-space-4); }
-  .app-scrub { width: 14rem; --p: 0%; }
+  /* iOS: without this a vertical drag that starts on a slider turns into a pan, and the preview stops redrawing until release. */
+  .pb-range { touch-action: none; }
+  .app-scrub { width: 14rem; margin-inline: var(--pb-space-4); --p: 0%; }
   /* Playhead: elapsed part of the loop filled in accent, thin bar thumb. --p is set from script. */
   .app-scrub::-webkit-slider-runnable-track { height: 0.5rem; border-color: var(--pb-edge); background: linear-gradient(to right, var(--pb-accent-muted) var(--p), var(--pb-surface-sunken) var(--p)); }
   .app-scrub::-moz-range-track { height: 0.5rem; border-color: var(--pb-edge); background: linear-gradient(to right, var(--pb-accent-muted) var(--p), var(--pb-surface-sunken) var(--p)); }
-  .app-scrub::-webkit-slider-thumb { width: 0.25rem; height: 1.25rem; margin-top: -0.4375rem; background: var(--pb-accent); border: 0; }
+  .app-scrub::-webkit-slider-thumb { width: 0.25rem; height: 1.25rem; margin-top: -0.375rem; background: var(--pb-accent); border: 0; }
   .app-scrub::-moz-range-thumb { width: 0.25rem; height: 1.25rem; background: var(--pb-accent); border: 0; }
   .app-clock, .app-meter { white-space: nowrap; }
   .app-clock { min-width: 6.5rem; }
@@ -50,7 +62,7 @@
   .app-link .pb-input { grid-column: 1 / -1; }
   /* Patchbay 2.3.0 bug: the positioned input paints over the wrapper's ::before, hiding the down arrow. Drop once fixed upstream. */
   .pb-number-wrap::before, .pb-number-wrap::after { z-index: 1; }
-  .app-actions { flex: none; padding: var(--pb-space-4) var(--pb-space-6); border-bottom: var(--pb-border-w) solid var(--pb-edge-soft); }
+  .app-actions { flex: none; justify-content: center; padding: var(--pb-space-4) var(--pb-space-6); border-bottom: var(--pb-border-w) solid var(--pb-edge-soft); }
   /* Phones: preview on top at a fixed share of the screen, settings scroll below it. */
   @media (max-width: 768px) {
     body { min-width: 0; } /* Patchbay's --pb-page-min-w floor is 680px */
@@ -106,7 +118,7 @@
 
       <div class="pb-tabpanel active app-panel" role="tabpanel" id="panel-look" aria-labelledby="tab-look">
         <section class="pb-section">
-          <h2 class="pb-section__title">Colour</h2>
+          <h2 class="pb-section__title">Color</h2>
           <div class="pb-form">
             <label class="pb-form__label" for="accent">Accent</label>
             <div class="pb-form__field pb-row"><input type="color" class="pb-input" id="accent" value="#107c10"><div class="app-swatches" id="swatches" role="group" aria-label="Accent presets"></div></div>
@@ -412,7 +424,7 @@ function buildFrame(p, W, H, px, t) {
   const L = Math.hypot(W, H) * 0.75;
 
   const count = Math.round(lerp(3, 10, busy) * Math.sqrt(aspect));
-  // Shared shape values keep neighbours parallel; Chaos adds per-ribbon jitter on top.
+  // Shared shape values keep neighbors parallel; Chaos adds per-ribbon jitter on top.
   const sideBias = [r(-0.5, 0.5), r(-0.5, 0.5)];
   const cross = rnd() < 0.65 ? -1 : 1; // -1 flips the fan through the focal point, so the ribbons cross there
   const bowDir = r(-1, 1);
@@ -711,6 +723,29 @@ function showNumber(n) {
 function syncNumbers() {
   document.querySelectorAll("input.num").forEach((n) => { if (document.activeElement !== n) showNumber(n); });
 }
+// Wheel over a slider steps it. A wheel that arrives mid-scroll keeps scrolling, so passing over a slider doesn't grab it.
+function wheelRanges() {
+  let lastScroll = 0, acc = 0, accFor = null;
+  addEventListener("scroll", () => { lastScroll = performance.now(); }, { capture: true, passive: true });
+  addEventListener("wheel", (e) => {
+    const r = e.target.closest?.("input[type=range]");
+    if (!r || r.disabled || performance.now() - lastScroll < 300) return;
+    e.preventDefault();
+    if (accFor !== r) { acc = 0; accFor = r; }
+    const px = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1;
+    acc += (Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? -e.deltaY : e.deltaX) * px;
+    const units = Math.trunc(acc / 25); // one step per 25 px of wheel
+    if (!units) return;
+    acc -= units * 25;
+    // At least 1% of the range per unit, so the 0–1000 scrubber isn't sluggish.
+    const step = +r.step || 1, unit = Math.max(step, Math.round((r.max - r.min) / 100 / step) * step);
+    const next = clamp(+r.value + units * unit, +r.min, +r.max);
+    if (next === +r.value) return;
+    r.value = next;
+    r.dispatchEvent(new Event("input", { bubbles: true }));
+    r.dispatchEvent(new Event("change", { bubbles: true }));
+  }, { passive: false });
+}
 function numberFields(root) {
   root.querySelectorAll("input[type=range]").forEach((r) => {
     const out = r.nextElementSibling;
@@ -874,7 +909,7 @@ async function exportVideo(span) {
     const mb = (jobs.reduce((s, j) => s + j.size, 0) / 1e6).toFixed(1), secs = ((performance.now() - t0) / 1000).toFixed(1);
     info.textContent = `Saved ${jobs.length} file${jobs.length > 1 ? "s" : ""} (${mb} MB, ${frames} frames each, ${jobs[0].config.codec}) in ${secs} s. ${notes.join(" ")}`;
   } catch (e) {
-    info.textContent = e.name === "AbortError" ? "Cancelled." : `Export failed: ${e.message}`;
+    info.textContent = e.name === "AbortError" ? "Canceled." : `Export failed: ${e.message}`;
   } finally {
     busyExporting = false;
     videoAbort = null;
@@ -956,7 +991,7 @@ function runKiosk(index, params) {
   function frame() {
     const dpr = window.devicePixelRatio || 1;
     const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
-    // Cover: keep the screen's aspect and crop the window's extra, centred.
+    // Cover: keep the screen's aspect and crop the window's extra, centered.
     const k = Math.max(w / s.w, h / s.h), vw = w / k, vh = h / k;
     const tiles = [tile([s.x + (s.w - vw) / 2, s.y + (s.h - vh) / 2, vw, vh], 0, 0, w, h)];
     if (sized !== w + "x" + h) { sized = w + "x" + h; lab.width = w; lab.height = h; drawLabels(lctx2, lay, tiles); }
@@ -1067,6 +1102,7 @@ if (params.has("kiosk") && R) {
     getPreview: () => ({ canvas: thumb, settings: readSettings(), layout: layout(readSettings()) }),
   });
   numberFields(document.querySelector("aside"));
+  wheelRanges();
   // WebCodecs exists only on secure pages: localhost or https, not a plain-http LAN address.
   if (!isSecureContext || !window.StudioMP4?.supported) {
     for (const b of ["videoEach", "videoSpan"]) $(b).disabled = true;

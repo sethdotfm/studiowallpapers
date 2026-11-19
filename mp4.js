@@ -58,7 +58,7 @@
     try {
       for (let i = 0; i < frames; i++) {
         if (failure) throw failure;
-        if (signal && signal.aborted) throw new DOMException("Cancelled", "AbortError");
+        if (signal && signal.aborted) throw new DOMException("Canceled", "AbortError");
         const canvas = renderFrame(i);
         const vf = new VideoFrame(canvas, { timestamp: Math.round(i * us), duration: Math.round(us) });
         enc.encode(vf, { keyFrame: i % gop === 0 });

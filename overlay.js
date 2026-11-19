@@ -105,7 +105,7 @@
     ctx.restore();
   }
 
-  function accentColour() {
+  function accentColor() {
     if (headless) return headless.accent;
     try { return cb.getPreview().settings.accent || "#7fd321"; } catch { return "#7fd321"; }
   }
@@ -124,7 +124,7 @@
       c.drawImage(ctx.canvas, Math.round(s.x * k), Math.round(s.y * k), sw, sh, 0, 0, sw, sh);
     }
     if ((S.text.on || S.image.on) && (host || headless)) {
-      const accent = S.text.useAccent ? accentColour() : "#fff";
+      const accent = S.text.useAccent ? accentColor() : "#fff";
       ordered.forEach((s, i) => {
         ctx.save();
         ctx.translate(s.x, s.y);
@@ -157,7 +157,7 @@
     if (snap) ctx.drawImage(snap, 0, 0, cw, ch);
     const k = cw / w;
     ctx.setTransform(k, 0, 0, k, 0, 0);
-    drawLayers(ctx, w, h, labelFor(0), accentColour());
+    drawLayers(ctx, w, h, labelFor(0), accentColor());
     const layer = S[active];
     if (layer.on) {
       const b = active === "text" ? textBounds(ctx, w, h, labelFor(0) || " ") : imageBounds(w, h);
@@ -265,8 +265,8 @@
       <div class="pb-form__field"><input type="text" class="pb-input pb-w-sm" id="ov-start" data-l="text" data-k="start" maxlength="3" autocomplete="off" spellcheck="false"></div>
       ${rangeHtml("text")}
       <label class="pb-form__label" for="ov-align">Align</label>
-      <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="ov-align" data-l="text" data-k="align"><option value="left">Left</option><option value="center">Centre</option><option value="right">Right</option></select></span></div>
-      <label class="pb-form__label" for="ov-color">Colour</label>
+      <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="ov-align" data-l="text" data-k="align"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></span></div>
+      <label class="pb-form__label" for="ov-color">Color</label>
       <div class="pb-form__field pb-row">
         <input type="color" class="pb-input" id="ov-color" data-l="text" data-k="color">
         <label class="pb-check"><input type="checkbox" class="pb-check__input" data-l="text" data-k="useAccent"><span class="pb-check__label">Use accent</span></label>
