@@ -3,7 +3,7 @@
 // on a mini editor (screen 0) and replayed on every screen in virtual pixels.
 (() => {
   const KEY = "studioOverlay.v1";
-  const FONT = '"Segoe UI", system-ui, -apple-system, sans-serif';
+  const FONT = '"Studio Segoe", "Segoe UI", system-ui, -apple-system, sans-serif'; // Studio Segoe: @font-face in index.html
   const MAX_SAVED_IMAGE = 1.5e6; // chars of data URL; keeps well under the ~5MB origin quota
 
   const DEF = {

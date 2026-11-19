@@ -6,6 +6,10 @@
 <meta name="color-scheme" content="dark">
 <title>Studio Wallpapers</title>
 <style>
+  /* Named faces pin the UI to Segoe UI by its full and PostScript names, so a family-name
+     mismatch can't fall through to the system font. */
+  @font-face { font-family: "Studio Segoe"; font-weight: 400; src: local("Segoe UI"), local("SegoeUI"); }
+  @font-face { font-family: "Studio Segoe"; font-weight: 600 700; src: local("Segoe UI Semibold"), local("SegoeUI-Semibold"), local("Segoe UI Bold"), local("SegoeUI-Bold"); }
   :root {
     --bg: #0b0d0b;
     --panel: #141714;
@@ -13,7 +17,7 @@
     --text: #e6ebe6;
     --muted: #8a948a;
     --accent: #7fd321;
-    font: 13px/1.4 "Segoe UI", system-ui, -apple-system, sans-serif;
+    font: 13px/1.4 "Studio Segoe", "Segoe UI", system-ui, -apple-system, sans-serif;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
@@ -641,6 +645,8 @@ window.StudioOverlay?.mount($("overlayPanel"), {
   getPreview: () => ({ canvas: preview, settings: readSettings(), layout: layout(readSettings()) }),
 });
 drawPreview();
+// Canvas text drawn before the web font finishes loading uses the fallback; redraw once it has.
+document.fonts?.ready.then(schedule);
 </script>
 </body>
 </html>
