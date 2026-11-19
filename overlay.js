@@ -3,11 +3,19 @@
 // on a mini editor (screen 0) and replayed on every screen in virtual pixels.
 (() => {
   const KEY = "studioOverlay.v1";
-  const FONT = '"Studio Segoe", "Segoe UI", system-ui, -apple-system, sans-serif'; // Studio Segoe: @font-face in index.html
+  // Label faces. Open Sans is bundled as a variable font, so every weight from 300 to 800 renders;
+  // the installed Segoe UI here has only Regular and Bold. Faces with @font-face live in index.html.
+  const FONTS = {
+    opensans: '"Studio Open Sans", "Segoe UI", sans-serif',
+    segoevar: '"Segoe UI Variable Display", "Segoe UI Variable", "Studio Open Sans", sans-serif',
+    segoe: '"Studio Segoe", "Segoe UI", "Studio Open Sans", sans-serif',
+    plex: '"IBM Plex Sans", "Studio Open Sans", sans-serif',
+  };
+  const fontOf = (t) => FONTS[t.font] || FONTS.opensans;
   const MAX_SAVED_IMAGE = 1.5e6; // chars of data URL; keeps well under the ~5MB origin quota
 
   const DEF = {
-    text: { on: false, series: "UTILITY PC", style: "num", start: "1", x: 0.5, y: 0.88, size: 0.05, weight: 600, spacing: 0.08, opacity: 0.9, color: "#ffffff", useAccent: false, align: "center" },
+    text: { on: false, series: "UTILITY PC", font: "opensans", style: "num", start: "1", x: 0.5, y: 0.88, size: 0.05, weight: 600, spacing: 0.08, opacity: 0.9, color: "#ffffff", useAccent: false, align: "center" },
     image: { on: false, src: "", name: "", x: 0.5, y: 0.12, size: 0.15, opacity: 1 },
   };
   const LIMITS = {
@@ -53,7 +61,7 @@
 
   function setFont(ctx, h) {
     const t = S.text, px = t.size * h;
-    ctx.font = `${Math.round(t.weight)} ${px}px ${FONT}`;
+    ctx.font = `${Math.round(t.weight)} ${px}px ${fontOf(t)}`;
     // letterSpacing adds a trailing gap; callers offset for it
     if ("letterSpacing" in ctx) ctx.letterSpacing = t.spacing * px + "px";
     return px;
@@ -214,7 +222,7 @@
   const pct = (v) => Math.round(v * 100) + "%";
   const RANGES = [
     ["text", "size", "Size", 0.01, 0.3, 0.001, (v) => (v * 100).toFixed(1) + "%"],
-    ["text", "weight", "Weight", 100, 900, 100, (v) => v],
+    ["text", "weight", "Weight", 100, 900, 10, (v) => v],
     ["text", "spacing", "Spacing", -0.05, 0.5, 0.01, (v) => v.toFixed(2)],
     ["text", "opacity", "Opacity", 0, 1, 0.01, pct],
     ["text", "x", "Position X", 0, 1, 0.001, pct],
@@ -240,6 +248,13 @@
     <div class="pb-form">
       <label class="pb-form__label" for="ov-series">Series</label>
       <div class="pb-form__field"><input type="text" class="pb-input" id="ov-series" data-l="text" data-k="series" maxlength="60" autocomplete="off" spellcheck="false" placeholder="UTILITY PC"></div>
+      <label class="pb-form__label" for="ov-font">Font</label>
+      <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="ov-font" data-l="text" data-k="font">
+        <option value="opensans">Open Sans (any weight 300–800)</option>
+        <option value="segoevar">Segoe UI Variable (Windows 11)</option>
+        <option value="segoe">Segoe UI (installed weights)</option>
+        <option value="plex">IBM Plex Sans (400–600)</option>
+      </select></span></div>
       <label class="pb-form__label" for="ov-style">Modifier</label>
       <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="ov-style" data-l="text" data-k="style">
         <option value="num">Numbers 1, 2, 3…</option>
@@ -302,6 +317,8 @@
   }
 
   function changed() {
+    // A newly picked face or weight may still be loading; redraw again once it has.
+    fontReady().then(() => { refreshEditor(); cb.onChange && cb.onChange(); });
     syncUI();
     refreshEditor();
     save();
@@ -376,6 +393,7 @@
       }
     }
     if (!["num", "alpha", "none"].includes(S.text.style)) S.text.style = "num";
+    if (!(S.text.font in FONTS)) S.text.font = DEF.text.font;
     if (!["left", "center", "right"].includes(S.text.align)) S.text.align = "center";
     if (!/^#[0-9a-f]{6}$/i.test(S.text.color)) S.text.color = "#ffffff";
     if (/^data:image\/(png|svg\+xml)[;,]/.test(S.image.src)) return setImageSrc(S.image.src, S.image.name).catch(() => { S.image.src = ""; S.image.on = false; });
@@ -409,6 +427,12 @@
     load().then(() => { syncUI(); refreshEditor(); cb.onChange && cb.onChange(); });
   }
 
+  // Canvas text drawn before its web font arrives silently uses a fallback; callers await this first.
+  function fontReady() {
+    const t = S.text;
+    return document.fonts ? document.fonts.load(`${Math.round(t.weight)} 48px ${fontOf(t)}`, labelFor(0) || "A").catch(() => {}) : Promise.resolve();
+  }
+
   // Kiosk pages carry the text layer in the URL; images stay on the machine that loaded them.
   function useText(text, accent) {
     headless = { accent: accent || "#7fd321" };
@@ -420,8 +444,9 @@
         else if (typeof d === "boolean") S.text[k] = !!text[k];
         else if (typeof text[k] === "string") S.text[k] = text[k];
       }
+      if (!(S.text.font in FONTS)) S.text.font = DEF.text.font;
     }
   }
 
-  window.StudioOverlay = { mount, draw, loadImage, useText, getState: () => JSON.parse(JSON.stringify(S)), labelFor };
+  window.StudioOverlay = { mount, draw, loadImage, useText, fontReady, getState: () => JSON.parse(JSON.stringify(S)), labelFor };
 })();

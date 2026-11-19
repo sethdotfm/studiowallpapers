@@ -42,7 +42,7 @@ Each screen has a kiosk link that plays that screen full window. Open one link p
 
 ## Labels
 
-The Labels panel puts an identifier on every screen. Turn on Text label, set Series (for example "UTILITY PC") and a Modifier of numbers or letters with a start value. Screens are numbered row by row, left to right, so a 3 × 2 grid gives UTILITY PC 1 to UTILITY PC 6. Drag the label in the screen 1 editor, or set size, weight, spacing, opacity, alignment and colour; every screen copies the layout. The image layer takes a PNG or SVG and places it the same way. Label settings are saved in the browser, not in the URL.
+The Labels panel puts an identifier on every screen. Turn on Text label, set Series (for example "UTILITY PC") and a Modifier of numbers or letters with a start value. Screens are numbered row by row, left to right, so a 3 × 2 grid gives UTILITY PC 1 to UTILITY PC 6. Drag the label in the screen 1 editor, or set font, size, weight, spacing, opacity, alignment and colour; every screen copies the layout. The default font is Open Sans, bundled as a variable font in `fonts/` (SIL Open Font License), so the weight slider renders every weight from 300 to 800. Segoe UI Variable gives the same on Windows 11 display PCs; plain Segoe UI and IBM Plex Sans only have the weights installed (Segoe UI on this Mac has Regular and Bold). The image layer takes a PNG or SVG and places it the same way. Label settings are saved in the browser, not in the URL.
 
 ## Export
 
