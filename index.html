@@ -27,9 +27,10 @@
   h1 { font-size: 15px; margin: 0 0 12px; letter-spacing: .02em; }
   fieldset { border: 0; border-top: 1px solid var(--line); margin: 0; padding: 12px 0 4px; }
   legend { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; padding: 0 0 6px; }
-  label { display: grid; grid-template-columns: 90px 1fr 38px; align-items: center; gap: 8px; margin: 0 0 8px; }
+  label { display: grid; grid-template-columns: 90px 1fr 54px; align-items: center; gap: 8px; margin: 0 0 8px; }
   label.wide { grid-template-columns: 90px 1fr; }
-  output { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  input.num { width: 100%; min-width: 0; background: #0b0d0b; color: var(--text); border: 1px solid var(--line); padding: 2px 4px; font: inherit; text-align: right; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+  input.num::-webkit-inner-spin-button, input.num::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
   input[type=range] { width: 100%; accent-color: var(--accent); }
   input[type=number], select { width: 100%; background: #0b0d0b; color: var(--text); border: 1px solid var(--line); padding: 4px 6px; font: inherit; }
   input[type=color] { width: 100%; height: 26px; background: none; border: 1px solid var(--line); padding: 0; }
@@ -48,7 +49,7 @@
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   @media (max-width: 760px) { body { grid-template-columns: 1fr; grid-template-rows: 45vh auto; } main { order: -1; } }
 </style>
-<link rel="stylesheet" href="overlay.css">
+<link rel="stylesheet" href="overlay.css?v=2">
 </head>
 <body>
 <aside>
@@ -129,7 +130,7 @@
   <div class="hint">Space: new seed · S: shuffle · the URL keeps your settings</div>
 </main>
 
-<script src="overlay.js"></script>
+<script src="overlay.js?v=2"></script>
 <script>
 "use strict";
 
@@ -556,12 +557,41 @@ function drawPreview() {
 
   const n = screens.length, mp = ((p.w * p.h * n) / 1e6).toFixed(1);
   $("exportInfo").textContent = `${p.cols}×${p.rows} grid of ${p.w}×${p.h} · span ${p.w * p.cols}×${p.h * p.rows} (${mp} MP)`;
-  for (const id of ctrlIds) {
-    const out = $(id).parentElement.querySelector("output");
-    if (out) out.textContent = $(id).value;
-  }
+  syncNumbers();
   document.documentElement.style.setProperty("--accent", p.accent);
   history.replaceState(null, "", "#" + new URLSearchParams(Object.entries(p)).toString());
+}
+
+// Each slider's <output> becomes a typable field. data-scale shows 0–1 sliders in percent.
+const scaleOf = (r) => +(r.dataset.scale || 1);
+function showNumber(n) {
+  const k = scaleOf(n._range);
+  n.value = +(+n._range.value * k).toFixed(k === 100 ? 1 : 2);
+}
+function syncNumbers() {
+  document.querySelectorAll("input.num").forEach((n) => { if (document.activeElement !== n) showNumber(n); });
+}
+function numberFields(root) {
+  root.querySelectorAll("label > input[type=range]").forEach((r) => {
+    const out = r.nextElementSibling;
+    if (!out || out.tagName !== "OUTPUT") return;
+    const k = scaleOf(r), n = document.createElement("input");
+    n.type = "number"; n.className = "num";
+    n.min = r.min * k; n.max = r.max * k; n.step = (+r.step || 1) * k;
+    n.setAttribute("aria-label", r.parentElement.firstChild.textContent.trim() + (k === 100 ? " (%)" : ""));
+    n._range = r;
+    n.addEventListener("input", () => {
+      if (n.value === "" || !isFinite(+n.value)) return;
+      r.value = clamp(+n.value / k, +r.min, +r.max);
+      r.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    // On Enter or blur, snap the field to what the slider accepted (clamped and stepped).
+    n.addEventListener("change", () => showNumber(n));
+    n.addEventListener("keydown", (e) => { if (e.key === "Enter") showNumber(n); });
+    r.addEventListener("input", () => { if (document.activeElement !== n) showNumber(n); });
+    out.replaceWith(n);
+    showNumber(n);
+  });
 }
 
 function schedule() { if (!queued) { queued = true; requestAnimationFrame(drawPreview); } }
@@ -664,6 +694,7 @@ window.StudioOverlay?.mount($("overlayPanel"), {
   onChange: schedule,
   getPreview: () => ({ canvas: preview, settings: readSettings(), layout: layout(readSettings()) }),
 });
+numberFields(document.querySelector("aside"));
 drawPreview();
 // Canvas text drawn before the web font finishes loading uses the fallback; redraw once it has.
 document.fonts?.ready.then(schedule);

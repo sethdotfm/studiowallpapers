@@ -3,10 +3,10 @@
 A single-page generator for dark, glowing ribbon wallpapers. Open `index.html` in a browser. It has no build step and no dependencies.
 
 ```bash
-python3 -m http.server 8931
+python3 serve.py
 ```
 
-Then open http://localhost:8931. Opening the file directly also works.
+Then open http://localhost:8931, or this machine's IP on port 8931 from another computer. `serve.py [port] [host]` defaults to 8931 on 0.0.0.0 and tells browsers not to cache, so edits show on a normal reload. Opening `index.html` directly also works.
 
 ## Controls
 
@@ -14,6 +14,7 @@ Then open http://localhost:8931. Opening the file directly also works.
 - Bezel gap is the physical border between screens, in pixels. The art is drawn across the gap and then cut out, so ribbons line up across screens.
 - Busyness sets the ribbon count. Fill sets how solid the glass core is. Spread fans the ribbons out from the point where they cross. Curl bends them. Chaos adds per-ribbon jitter; at 0 the ribbons stay evenly spaced. Twist turns each ribbon about its spine, so it narrows and flips to its darker back face.
 - Edge hue shifts the colour of the far bevel away from the accent (positive goes toward yellow for green). Bloom adds a soft glow over the whole image. Pixel bits adds square trails along some ribbons. Grain adds film noise.
+- Every slider has a number field you can type into. Label sizes and positions are in percent of the screen.
 - The seed fixes the layout. Space picks a new seed and S shuffles every slider.
 - The URL hash holds all settings, so a link reproduces the same image.
 

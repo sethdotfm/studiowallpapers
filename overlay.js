@@ -223,7 +223,7 @@
     ["image", "y", "Position Y", 0, 1, 0.001, pct],
   ];
   const rangeHtml = (layer) => RANGES.filter((r) => r[0] === layer).map(([l, k, label, min, max, step]) =>
-    `<label>${label}<input type="range" data-l="${l}" data-k="${k}" min="${min}" max="${max}" step="${step}"><output></output></label>`).join("");
+    `<label>${label}<input type="range" data-l="${l}" data-k="${k}" min="${min}" max="${max}" step="${step}" data-scale="${max <= 1 && k !== "spacing" ? 100 : 1}"><output></output></label>`).join("");
 
   function build() {
     host.insertAdjacentHTML("beforeend", `
@@ -273,10 +273,6 @@
       const v = S[n.dataset.l][n.dataset.k];
       if (n.type === "checkbox") n.checked = !!v;
       else if (document.activeElement !== n) n.value = v;
-      if (n.type === "range") {
-        const fmt = RANGES.find((r) => r[0] === n.dataset.l && r[1] === n.dataset.k)[6];
-        n.nextElementSibling.textContent = fmt(+v);
-      }
     });
     field({ l: "text", k: "color" }).disabled = S.text.useAccent;
     field({ l: "text", k: "start" }).disabled = S.text.style === "none";
