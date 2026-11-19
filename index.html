@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -58,7 +58,7 @@
     .app > .pb-toolbar { flex-wrap: wrap; }
     .app > .pb-toolbar > .pb-toolbar__sep, .app > .pb-toolbar > .pb-toolbar__spacer { display: none; }
     .app > .pb-toolbar > .pb-toolbar__title { flex: 1 1 auto; padding-left: var(--pb-space-2); }
-    /* Zero-height item that breaks the line: title and theme above, playback below. */
+    /* Zero-height item that breaks the line: title above, playback below. */
     .app > .pb-toolbar::after { content: ""; flex: 1 0 100%; order: 2; }
     .app > .pb-toolbar > #play, .app > .pb-toolbar > .app-scrub, .app > .pb-toolbar > .app-clock, .app > .pb-toolbar > .app-meter { order: 3; }
     .app > .pb-toolbar > .app-scrub { flex: 1 1 0; width: auto; min-width: 0; }
@@ -86,7 +86,6 @@
     <span class="pb-text-muted pb-num app-clock" id="clock">0.0 / 20 s</span>
     <span class="pb-toolbar__spacer"></span>
     <span class="pb-text-muted pb-num app-meter" id="fpsMeter" title="Browser frame rate · render time per frame"></span>
-    <button class="pb-btn pb-btn--ghost pb-btn--sm" id="theme">Light mode</button>
   </div>
 
   <div class="app-body">
@@ -1039,11 +1038,6 @@ if (params.has("kiosk") && R) {
     el.addEventListener("input", () => { showCustom(); settingsChanged(); });
   });
   bindTabs();
-  $("theme").onclick = () => {
-    const light = document.documentElement.dataset.theme !== "light";
-    const go = () => { document.documentElement.dataset.theme = light ? "light" : "dark"; $("theme").textContent = light ? "Dark mode" : "Light mode"; };
-    document.startViewTransition ? document.startViewTransition(go) : go();
-  };
   $("scrub").addEventListener("input", () => {
     if (current) clock.t = ($("scrub").value / 1000) * current.p.period;
     setPlaying(false);
