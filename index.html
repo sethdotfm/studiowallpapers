@@ -297,27 +297,47 @@ const smooth = (x) => x * x * (3 - 2 * x);
 // Fade along the ribbon, so ends dissolve into the dark instead of stopping at the frame.
 const envelope = (rb, u) => (u < 0.5 ? lerp(rb.fadeA, 1, smooth(u * 2)) : lerp(1, rb.fadeB, smooth(u * 2 - 1)));
 
-// Cheap wide blur: shrink the frame in steps (each step averages pixels) and screen the
-// small copies back on top. Works without ctx.filter, which Safari lacks.
+// Wide soft glow without ctx.filter (Safari lacks it): halve the frame one step at a time, add each
+// smaller level back onto the next larger one, then scale up 2x at a time. Bigger single jumps
+// skip pixels on the way down and stretch them into blocks on the way up.
 function bloom(ctx, amount) {
-  const src = ctx.canvas, cw = src.width, ch = src.height;
-  if (!cw || !ch) return;
+  const src = ctx.canvas;
+  if (!src.width || !src.height) return;
+  const make = (w, h) => {
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, w); c.height = Math.max(1, h);
+    const g = c.getContext("2d");
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+    return c;
+  };
+  const levels = [src];
+  while (levels.length < 9) {
+    const p = levels[levels.length - 1];
+    if (p.width < 4 || p.height < 4) break;
+    const c = make(Math.ceil(p.width / 2), Math.ceil(p.height / 2));
+    c.getContext("2d").drawImage(p, 0, 0, c.width, c.height);
+    levels.push(c);
+  }
+  // Levels finer than 1/8 are left out: they keep the lines sharp, and sharp lines blown up show as blocks.
+  const base = Math.min(3, levels.length - 1);
+  for (let i = levels.length - 2; i >= base; i--) {
+    const g = levels[i].getContext("2d");
+    g.globalCompositeOperation = "lighter";
+    g.globalAlpha = 0.8;
+    g.drawImage(levels[i + 1], 0, 0, levels[i].width, levels[i].height);
+  }
+  let up = levels[base];
+  for (let i = base - 1; i >= 1; i--) {
+    const c = make(levels[i].width, levels[i].height);
+    c.getContext("2d").drawImage(up, 0, 0, c.width, c.height);
+    up = c;
+  }
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high";
   ctx.globalCompositeOperation = "screen";
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  let prev = src;
-  for (const [div, a] of [[4, 0.4], [12, 0.6], [36, 0.8]]) {
-    const c = document.createElement("canvas");
-    c.width = Math.max(1, Math.round(cw / div)); c.height = Math.max(1, Math.round(ch / div));
-    const g = c.getContext("2d");
-    g.imageSmoothingQuality = "high";
-    g.drawImage(prev, 0, 0, c.width, c.height);
-    ctx.globalAlpha = a * amount;
-    ctx.drawImage(c, 0, 0, cw, ch);
-    prev = c;
-  }
+  ctx.globalAlpha = Math.min(1, amount * 0.45);
+  ctx.drawImage(up, 0, 0, src.width, src.height);
   ctx.restore();
 }
 
