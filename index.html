@@ -52,6 +52,8 @@
   .bezel--h { top: auto; bottom: auto; left: 0; right: 0; }
   .hint { position: absolute; left: 24px; bottom: 12px; color: var(--muted); font-size: 12px; }
   .note { color: var(--muted); font-size: 12px; margin: 4px 0 8px; }
+  .fps { position: absolute; right: 16px; top: 12px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; pointer-events: none; }
+  body.kiosk .fps { position: fixed; display: block; z-index: 2; color: #9aa59a; text-shadow: 0 0 3px #000; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   body.kiosk { display: block; background: #000; cursor: none; overflow: hidden; }
   body.kiosk aside, body.kiosk main { display: none; }
@@ -162,6 +164,9 @@
 
   <fieldset>
     <legend>Video loop</legend>
+    <label class="wide">Codec
+      <select id="codec"><option value="hevc" selected>HEVC (H.265)</option><option value="avc">H.264</option></select>
+    </label>
     <label class="wide">Frame rate
       <select id="fps"><option>24</option><option>25</option><option selected>30</option><option>50</option><option>60</option></select>
     </label>
@@ -191,11 +196,12 @@
 
 <main>
   <div id="stage"><canvas id="preview"></canvas></div>
+  <div class="fps" id="fpsMeter" aria-live="off"></div>
   <div class="hint">Space: new seed · S: shuffle shape · M: shuffle motion · P: play/pause · the URL keeps your settings</div>
 </main>
 
-<script src="gl.js?v=1"></script>
-<script src="mp4.js?v=1"></script>
+<script src="gl.js?v=2"></script>
+<script src="mp4.js?v=2"></script>
 <script src="overlay.js?v=3"></script>
 <script>
 "use strict";
@@ -203,9 +209,9 @@
 const PALETTES = ["#7fd321", "#107c10", "#3ad16b", "#c8ff3d", "#2fd6b0", "#e8e8e8", "#38a8ff", "#ff5a36"];
 const $ = (id) => document.getElementById(id);
 const SHAPE_IDS = ["cols", "rows", "gap", "accent", "bgGlow", "whites", "busy", "fill", "angle", "spread", "curl", "chaos", "twist", "shift", "glow", "bits", "grain", "seed"];
-const MOTION_IDS = ["loop", "speed", "swipe", "swipeLen", "flow", "drift", "breathe", "wander", "roll", "sheen", "bitsFlow", "fps", "vbr"];
+const MOTION_IDS = ["loop", "speed", "swipe", "swipeLen", "flow", "drift", "breathe", "wander", "roll", "sheen", "bitsFlow", "fps", "vbr", "codec"];
 const ctrlIds = [...SHAPE_IDS, ...MOTION_IDS];
-const TEXT_IDS = new Set(["accent", "swipe"]);
+const TEXT_IDS = new Set(["accent", "swipe", "codec"]);
 const TAU = Math.PI * 2;
 
 // ---------- helpers ----------
@@ -507,10 +513,25 @@ function layoutPreview() {
   updateKioskLinks();
 }
 
+// Browser frame rate (time between animation frames) and our own render cost per frame.
+const meter = { last: 0, dt: 0, ms: 0, shown: 0 };
+function meterFrame(now, renderMs) {
+  if (meter.last) meter.dt = meter.dt ? lerp(meter.dt, now - meter.last, 0.1) : now - meter.last;
+  meter.last = now;
+  meter.ms = meter.ms ? lerp(meter.ms, renderMs, 0.1) : renderMs;
+  if (now - meter.shown > 250 && meter.dt) {
+    meter.shown = now;
+    $("fpsMeter").textContent = `${Math.round(1000 / meter.dt)} fps · ${meter.ms.toFixed(1)} ms render`;
+  }
+}
+
 function drawPreview() {
   queued = false;
   if (!R || !current || busyExporting) return;
+  const r0 = performance.now();
   renderView(current.p, current.lay, clock.t, [0, 0, current.lay.W, current.lay.H], pctx);
+  if (clock.playing) meterFrame(r0, performance.now() - r0);
+  else { meter.last = 0; $("fpsMeter").textContent = `paused · ${(performance.now() - r0).toFixed(1)} ms render`; }
   const L = current.p.loop;
   if (document.activeElement !== $("scrub")) $("scrub").value = Math.round((clock.t / L) * 1000);
   $("clock").textContent = `${clock.t.toFixed(1)} / ${L} s`;
@@ -621,6 +642,17 @@ async function exportPNG(each) {
 // ---------- video loop ----------
 
 let videoAbort = null;
+const CODEC_NAME = { hevc: "HEVC", avc: "H.264" };
+
+// Marks each codec option with whether this browser can encode one screen at the current size.
+async function probeCodecs() {
+  if (!isSecureContext || !window.StudioMP4?.supported) return;
+  const p = readSettings();
+  for (const opt of $("codec").options) {
+    const ok = await StudioMP4.pick(opt.value, even(p.w), even(p.h), p.fps, p.vbr * 1e6);
+    opt.textContent = (opt.value === "hevc" ? "HEVC (H.265)" : "H.264") + (ok ? "" : " (not available here)");
+  }
+}
 const even = (n) => n - (n % 2);
 
 async function exportVideo(span) {
@@ -640,9 +672,17 @@ async function exportVideo(span) {
   try {
     for (let ji = 0; ji < jobs.length; ji++) {
       const job = jobs[ji];
-      const config = await StudioMP4.pick(job.w, job.h, fps, bitrate);
+      let config = await StudioMP4.pick(p.codec, job.w, job.h, fps, bitrate);
+      let note = "";
       if (!config) {
-        info.textContent = `No H.264 encoder here accepts ${job.w}×${job.h}.` + (span ? " Try MP4 per monitor." : "");
+        // Fall back to the other codec before giving up; say so, since file sizes and players differ.
+        const other = p.codec === "hevc" ? "avc" : "hevc";
+        config = await StudioMP4.pick(other, job.w, job.h, fps, bitrate);
+        if (config) note = ` ${CODEC_NAME[p.codec]} refused ${job.w}×${job.h}, so this file is ${CODEC_NAME[other]}.`;
+      }
+      if (!config) {
+        info.textContent = `Neither HEVC nor H.264 encoding is available here at ${job.w}×${job.h}, ${fps} fps, ${p.vbr} Mbps.` +
+          (span ? " Try MP4 per monitor." : " Try a lower frame rate or bitrate, or a smaller resolution.");
         return;
       }
       const out = document.createElement("canvas");
@@ -669,7 +709,7 @@ async function exportVideo(span) {
       });
       const name = `studio-${p.seed}-${p.loop}s-${fps}fps${job.name ? "-" + job.name : ""}.mp4`;
       download(blob, name);
-      info.textContent = `Saved ${name} (${(blob.size / 1e6).toFixed(1)} MB, ${frames} frames).`;
+      info.textContent = `Saved ${name} (${(blob.size / 1e6).toFixed(1)} MB, ${frames} frames, ${config.codec}).${note}`;
     }
     if (jobs.length > 1) info.textContent = `Saved ${jobs.length} files, ${frames} frames each.`;
   } catch (e) {
@@ -735,8 +775,12 @@ function runKiosk(index, params) {
   cv.id = "kioskCanvas";
   const hint = document.createElement("div");
   hint.id = "kioskHint";
-  hint.textContent = "Double-click for full screen";
-  document.body.append(cv, hint);
+  hint.textContent = "Double-click for full screen · F shows frame rate";
+  // The meter sits in <main>, which kiosk hides; move it out. F or &fps=1 shows it.
+  const fpsEl = $("fpsMeter");
+  document.body.append(cv, hint, fpsEl);
+  fpsEl.hidden = params.get("fps") !== "1";
+  addEventListener("keydown", (e) => { if (e.key === "f" || e.key === "F") fpsEl.hidden = !fpsEl.hidden; });
   setTimeout(() => (hint.style.opacity = 0), 4000);
   addEventListener("dblclick", () => { document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.(); });
   if (params.has("lbl")) { try { window.StudioOverlay?.useText(unb64(params.get("lbl")), readSettings().accent); } catch { /* bad link: no label */ } }
@@ -750,7 +794,9 @@ function runKiosk(index, params) {
     // Cover: keep the screen's aspect and crop the window's extra, centred.
     const k = Math.max(w / s.w, h / s.h), vw = w / k, vh = h / k;
     const view = [s.x + (s.w - vw) / 2, s.y + (s.h - vh) / 2, vw, vh];
+    const r0 = performance.now();
     renderView(p, lay, (Date.now() / 1000) % p.loop, view, ctx);
+    meterFrame(r0, performance.now() - r0);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -834,6 +880,8 @@ if (params.has("kiosk") && R) {
   layoutPreview();
   drawPreview();
   requestAnimationFrame(tick);
+  probeCodecs();
+  for (const id of ["res", "w", "h", "fps", "vbr"]) $(id).addEventListener("change", probeCodecs);
   // Canvas text drawn before the web font finishes loading uses the fallback; redraw once it has.
   document.fonts?.ready.then(schedule);
 }

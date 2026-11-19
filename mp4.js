@@ -1,21 +1,31 @@
 "use strict";
-// H.264 MP4 export with WebCodecs. Frames are rendered and encoded one at a time from a frame index,
+// H.264 / HEVC MP4 export with WebCodecs. Frames are rendered and encoded one at a time from a frame index,
 // never from wall-clock time, so a loop of N frames is exactly N frames and repeats without a seam.
 // The muxer writes one video track, one chunk: ftyp, mdat, moov.
 (() => {
   // Highest level first; hardware encoders often reject large frames at lower levels and vice versa.
-  const CODECS = ["avc1.640034", "avc1.640033", "avc1.640032", "avc1.64002A", "avc1.640028", "avc1.4D0034", "avc1.4D0028", "avc1.42E034", "avc1.42E028"];
+  const CODECS = {
+    avc: ["avc1.640034", "avc1.640033", "avc1.640032", "avc1.64002A", "avc1.640028", "avc1.4D0034", "avc1.4D0028", "avc1.42E034", "avc1.42E028"],
+    // hvc1 (parameter sets in the sample entry) is the form QuickTime and Apple players expect.
+    hevc: ["hvc1.1.6.L156.B0", "hvc1.1.6.L153.B0", "hvc1.1.6.L150.B0", "hvc1.1.6.L123.B0", "hvc1.1.6.L120.B0"],
+  };
   const TIMESCALE = 90000; // divisible by 24, 25, 30, 50 and 60
 
-  async function pick(width, height, fps, bitrate) {
+  // Tries the preferred settings first, then plainer ones: some encoders reject quality latency or
+  // variable bitrate outright even though they encode the size fine.
+  async function pick(kind, width, height, fps, bitrate) {
     if (!("VideoEncoder" in window)) return null;
-    for (const codec of CODECS) {
+    const fmt = kind === "hevc" ? { hevc: { format: "hevc" } } : { avc: { format: "avc" } };
+    const extras = [{ latencyMode: "quality", bitrateMode: "variable" }, { bitrateMode: "variable" }, {}];
+    for (const codec of CODECS[kind]) {
       for (const hardwareAcceleration of ["prefer-hardware", "no-preference"]) {
-        const config = { codec, width, height, bitrate, framerate: fps, avc: { format: "avc" }, latencyMode: "quality", bitrateMode: "variable", hardwareAcceleration };
-        try {
-          const r = await VideoEncoder.isConfigSupported(config);
-          if (r.supported) return r.config;
-        } catch { /* try the next one */ }
+        for (const extra of extras) {
+          const config = { codec, width, height, bitrate, framerate: fps, hardwareAcceleration, ...fmt, ...extra };
+          try {
+            const r = await VideoEncoder.isConfigSupported(config);
+            if (r.supported) return r.config;
+          } catch { /* try the next one */ }
+        }
       }
     }
     return null;
@@ -55,8 +65,9 @@
       if (enc.state !== "closed") enc.close();
     }
     if (failure) throw failure;
-    if (!description) throw new Error("Encoder returned no H.264 configuration");
-    return mux({ width: config.width, height: config.height, fps, chunks, description });
+    const hevc = config.codec.startsWith("hvc1") || config.codec.startsWith("hev1");
+    if (!description) throw new Error(`Encoder returned no ${hevc ? "HEVC" : "H.264"} configuration`);
+    return mux({ width: config.width, height: config.height, fps, chunks, description, hevc });
   }
 
   const enc = new TextEncoder();
@@ -75,9 +86,9 @@
   const full = (type, ver, flags, ...parts) => box(type, u8(ver, (flags >> 16) & 255, (flags >> 8) & 255, flags & 255), ...parts);
   const MATRIX = cat([0x10000, 0, 0, 0, 0x10000, 0, 0, 0, 0x40000000].map(u32));
 
-  function mux({ width, height, fps, chunks, description }) {
+  function mux({ width, height, fps, chunks, description, hevc }) {
     const n = chunks.length, dur = TIMESCALE / fps, total = n * dur, ms = Math.round((n * 1000) / fps);
-    const ftyp = box("ftyp", enc.encode("isom"), u32(0x200), enc.encode("isomiso2avc1mp41"));
+    const ftyp = box("ftyp", enc.encode("isom"), u32(0x200), enc.encode(hevc ? "isomiso2hvc1mp41" : "isomiso2avc1mp41"));
     const dataLen = chunks.reduce((s, c) => s + c.data.length, 0);
     if (dataLen + 8 > 0xffffffff) throw new Error("Video over 4 GB; lower the bitrate or length");
     const mdatHead = cat([u32(dataLen + 8), enc.encode("mdat")]);
@@ -90,13 +101,13 @@
 
     const keys = [];
     chunks.forEach((c, i) => { if (c.key) keys.push(i + 1); });
-    const avc1 = box("avc1",
+    const entry = box(hevc ? "hvc1" : "avc1",
       zeros(6), u16(1), zeros(16), u16(width), u16(height), u32(0x00480000), u32(0x00480000), u32(0), u16(1), zeros(32), u16(0x18), u16(0xffff),
-      box("avcC", description),
+      box(hevc ? "hvcC" : "avcC", description),
       box("colr", enc.encode("nclx"), u16(1), u16(1), u16(1), u8(0)),
       box("pasp", u32(1), u32(1)));
     const stbl = box("stbl",
-      full("stsd", 0, 0, u32(1), avc1),
+      full("stsd", 0, 0, u32(1), entry),
       full("stts", 0, 0, u32(1), u32(n), u32(dur)),
       ctts,
       full("stss", 0, 0, u32(keys.length), ...keys.map(u32)),

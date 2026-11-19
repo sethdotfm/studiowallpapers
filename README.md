@@ -26,11 +26,12 @@ The preview plays continuously. Every movement repeats exactly once per loop, so
 - Swipe reveals each ribbon as a travelling window: left to right, right to left, alternating, or random per ribbon. Swipe length sets how much of the ribbon shows at once.
 - Flow sends waves along the ribbons in the swipe direction. Drift slowly sways the ends and the bow. Breathe swells and thins the width. Wander adds uneven per-ribbon movement.
 - Roll turns the twist, Sheen slides the reflections and Bits flow moves the pixel bits, each in whole cycles per loop (negative reverses).
+- The top-right corner shows the browser's frame rate and the render time per frame. In kiosk mode press F, or add `&fps=1` to the link, to show it.
 - Shuffle motion (M) randomises these. P plays or pauses; the scrubber picks a moment for stills.
 
 ## Video loop
 
-MP4 per monitor encodes one H.264 file per screen; Span MP4 encodes the whole wall in one file with the bezels cut out. Frames are rendered one at a time at exact loop positions, so a 20 s loop at 30 fps is exactly 600 frames and repeats cleanly in any player set to loop. Hardware H.264 encoders cap the frame size (on this Mac 5760 × 1080 works and 7680 × 2160 doesn't), so large spans may be refused; per-monitor files are the reliable path. Browsers only expose the video encoder on secure pages, so export from http://localhost:8931 on the machine running the server, or over https; a plain http network address can play and save stills but not encode video.
+MP4 per monitor encodes one file per screen; Span MP4 encodes the whole wall in one file with the bezels cut out. Codec is HEVC (H.265) or H.264; HEVC uses the Mac's hardware encoder, makes smaller files at the same quality, and on this Mac encodes spans up to at least 7680 × 2160. If the chosen codec can't encode a size, the export falls back to the other one and says so. The codec list marks a codec "not available here" when this browser can't encode one screen at the current size. Frames are rendered one at a time at exact loop positions, so a 20 s loop at 30 fps is exactly 600 frames and repeats cleanly in any player set to loop. Hardware H.264 encoders cap the frame size (on this Mac 5760 × 1080 works and 7680 × 2160 doesn't), so use HEVC for big spans. Browsers only expose the video encoder on secure pages, so export from http://localhost:8931 on the machine running the server, or over https; a plain http network address can play and save stills but not encode video.
 
 ## Kiosk
 
