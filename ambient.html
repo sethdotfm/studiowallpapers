@@ -47,6 +47,8 @@
   .app-colors input[type=color] { width: 2.75rem; padding: 2px; }
   .pb-number-wrap::before, .pb-number-wrap::after { z-index: 1; }
   .app-actions { flex: none; justify-content: center; padding: var(--pb-space-4) var(--pb-space-6); border-bottom: var(--pb-border-w) solid var(--pb-edge-soft); }
+  .app-still { margin: 0; display: grid; gap: var(--pb-space-3); }
+  .app-still img { max-width: 100%; max-height: 22rem; justify-self: start; border: var(--pb-border-w) solid var(--pb-edge); background: #fff; }
   [data-mode][hidden], [data-print][hidden], [hidden] { display: none !important; }
   @media (max-width: 768px) {
     body { min-width: 0; }
@@ -255,6 +257,7 @@
             <button class="pb-btn" id="printPng"><svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="patchbay/icons/lucide.svg#image"/></svg>Print PNG</button>
             <button class="pb-btn" id="printBtn"><svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="patchbay/icons/lucide.svg#printer"/></svg>Print…</button>
           </div>
+          <figure class="app-still" id="stillOut" hidden><img id="stillImg" alt=""><figcaption class="pb-note" id="stillName"></figcaption></figure>
           <p class="pb-note" data-print hidden>Tile size is a target: it is nudged so whole tiles fill the space, and any spare goes into the border. Border and gaps are paper color (no ink). Print at 100% / actual size, not "fit to page".</p>
         </section>
         <section class="pb-section">
@@ -316,6 +319,6 @@
 </div>
 
 <script src="mp4.js?v=5"></script>
-<script src="ambient.js?v=2"></script>
+<script src="ambient.js?v=3"></script>
 </body>
 </html>

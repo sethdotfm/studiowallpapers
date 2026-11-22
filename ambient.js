@@ -549,7 +549,9 @@ async function exportPNG() {
     c.getContext("2d").drawImage(R.canvas, 0, 0);
     let blob = await new Promise((r) => c.toBlob(r, "image/png"));
     if (p.print) blob = await withDpi(blob, p.dpi);
-    download(blob, fileBase(p) + (p.print ? `-${p.paper}-${p.dpi}dpi` : "") + ".png");
+    const name = fileBase(p) + (p.print ? `-${p.paper}-${p.dpi}dpi` : "") + ".png";
+    download(blob, name);
+    showStill(blob, name, p);
   } finally { busy = false; changed(); }
 }
 
@@ -585,6 +587,18 @@ function printStill() {
   img.onload = () => window.print();
   img.src = url;
 }
+
+// Some hosts (sandboxed frames such as a claude.ai artifact) block downloads. The image is also shown
+// here, so it can be saved with right-click or long-press; the saved file keeps its dpi tag.
+function showStill(blob, name, p) {
+  const box = $("stillOut"), img = $("stillImg");
+  if (img.src) URL.revokeObjectURL(img.src);
+  img.src = URL.createObjectURL(blob);
+  img.alt = name;
+  $("stillName").textContent = `${name} · ${p.w} × ${p.h} px${p.print ? ` · ${p.dpi} dpi` : ""}. If no download started, right-click (or long-press) the image and save it.`;
+  box.hidden = false;
+}
+const framed = (() => { try { return window.self !== window.top; } catch { return true; } })();
 
 let videoAbort = null;
 const even = (n) => n - (n % 2);
@@ -681,6 +695,8 @@ if (!isSecureContext || !window.StudioMP4?.supported) {
   $("videoInfo").textContent = !isSecureContext ? "Video export needs a secure page: open it as http://localhost:8931 or over https." : "This browser has no WebCodecs video encoder. Use Chrome or Edge.";
 }
 if (document.body.classList.contains("full") && R) { document.body.append(R.canvas); }
+// In a frame the print dialog never opens; the PNG plus a normal print app does the job.
+if (framed) $("printBtn").hidden = true;
 layoutPreview();
 drawPreview();
 requestAnimationFrame(tick);
