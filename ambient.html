@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Studio Ambient</title>
+<link href="patchbay/fonts/plex.css" rel="stylesheet">
+<link href="patchbay/css/bootstrap.min.css" rel="stylesheet">
+<link href="patchbay/css/patchbay.tokens.css" rel="stylesheet">
+<link href="patchbay/css/patchbay.css" rel="stylesheet">
+<style>
+  /* Same layout as index.html (Ribbons), trimmed. Patchbay is vendored in patchbay/. */
+  @font-face { font-family: "Studio Segoe"; font-weight: 400; src: local("Segoe UI"), local("SegoeUI"); }
+  @font-face { font-family: "Studio Segoe"; font-weight: 600 700; src: local("Segoe UI Semibold"), local("SegoeUI-Semibold"), local("Segoe UI Bold"), local("SegoeUI-Bold"); }
+  :root { --pb-font: "Studio Segoe", "Segoe UI", "IBM Plex Sans", system-ui, sans-serif; }
+  @supports (color: oklch(from red l c h)) {
+    :root {
+      --accent: #2f6bff;
+      --pb-accent: light-dark(oklch(from var(--accent) min(l, 0.48) c h), oklch(from var(--accent) max(l, 0.74) c h));
+      --pb-accent-hover: light-dark(oklch(from var(--pb-accent) calc(l - 0.07) c h), oklch(from var(--pb-accent) calc(l + 0.07) c h));
+      --pb-accent-wash: color-mix(in srgb, var(--pb-accent) 13%, transparent);
+    }
+  }
+  html, body { height: 100%; margin: 0; }
+  .app { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; height: 100%; }
+  .app-body { display: grid; grid-template-columns: 24rem 1fr; min-height: 0; }
+  .app-side { display: flex; flex-direction: column; min-height: 0; border-right: var(--pb-border-w) solid var(--pb-edge); }
+  .app-side > .pb-tabs { flex: none; justify-content: safe center; }
+  .app-panels { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .app-panel { gap: var(--pb-space-8); padding: var(--pb-space-7) var(--pb-space-6) var(--pb-space-9); }
+  .app-panel.active { display: grid; }
+  .app-panel .pb-form { --pb-label-w: 6.5rem; }
+  .app-panel .pb-note { margin: 0; }
+  .app-stage { position: relative; display: grid; place-items: center; min-width: 0; min-height: 0; padding: var(--pb-space-9); overflow: hidden; background: var(--pb-surface-sunken); }
+  #stage { position: relative; max-width: 100%; max-height: 100%; }
+  #stage > canvas { display: block; }
+  .pb-range { touch-action: none; }
+  .app-scrub { width: 14rem; margin-inline: var(--pb-space-4); --p: 0%; }
+  .app-scrub::-webkit-slider-runnable-track { height: 0.5rem; border-color: var(--pb-edge); background: linear-gradient(to right, var(--pb-accent-muted) var(--p), var(--pb-surface-sunken) var(--p)); }
+  .app-scrub::-moz-range-track { height: 0.5rem; border-color: var(--pb-edge); background: linear-gradient(to right, var(--pb-accent-muted) var(--p), var(--pb-surface-sunken) var(--p)); }
+  .app-scrub::-webkit-slider-thumb { width: 0.25rem; height: 1.25rem; margin-top: -0.375rem; background: var(--pb-accent); border: 0; }
+  .app-scrub::-moz-range-thumb { width: 0.25rem; height: 1.25rem; background: var(--pb-accent); border: 0; }
+  .app-clock, .app-meter { white-space: nowrap; }
+  .app-clock { min-width: 6.5rem; }
+  .app-colors { display: flex; flex-wrap: wrap; gap: var(--pb-space-2); }
+  .app-colors input[type=color] { width: 2.75rem; padding: 2px; }
+  .pb-number-wrap::before, .pb-number-wrap::after { z-index: 1; }
+  .app-actions { flex: none; justify-content: center; padding: var(--pb-space-4) var(--pb-space-6); border-bottom: var(--pb-border-w) solid var(--pb-edge-soft); }
+  [data-mode][hidden] { display: none !important; }
+  @media (max-width: 768px) {
+    body { min-width: 0; }
+    .app { height: 100dvh; }
+    .app > .pb-toolbar { flex-wrap: wrap; }
+    .app > .pb-toolbar > .pb-toolbar__sep, .app > .pb-toolbar > .pb-toolbar__spacer { display: none; }
+    .app > .pb-toolbar > .pb-toolbar__title { flex: 1 1 auto; padding-left: var(--pb-space-2); }
+    .app > .pb-toolbar::after { content: ""; flex: 1 0 100%; order: 2; }
+    .app > .pb-toolbar > #play, .app > .pb-toolbar > .app-scrub, .app > .pb-toolbar > .app-clock { order: 3; }
+    .app > .pb-toolbar > .app-scrub { flex: 1 1 0; width: auto; min-width: 0; }
+    .app > .pb-toolbar > .app-clock { min-width: 0; }
+    .app > .pb-toolbar > .app-meter { display: none; }
+    .app-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: min(38svh, 60vw) minmax(0, 1fr); }
+    .app-stage { grid-row: 1; padding: var(--pb-space-5); }
+    .app-side { grid-row: 2; border-right: 0; border-top: var(--pb-border-w) solid var(--pb-edge); }
+    .app-panel { padding: var(--pb-space-7) var(--pb-space-5) var(--pb-space-10); }
+  }
+  body.full { background: #000; overflow: hidden; cursor: none; }
+  body.full .app { display: none; }
+  body.full > canvas { position: fixed; inset: 0; width: 100vw !important; height: 100vh !important; display: block; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="pb-toolbar" role="toolbar" aria-label="Studio Ambient">
+    <span class="pb-toolbar__title">Studio Ambient</span>
+    <span class="pb-select-wrap" style="flex:none;width:8rem"><select class="pb-select" id="mode" aria-label="Style">
+      <option value="blobs">Blobs</option><option value="tiles">Tiles</option>
+    </select></span>
+    <a class="pb-btn pb-btn--sm pb-btn--ghost" href="index.html">Ribbons</a>
+    <div class="pb-toolbar__sep"></div>
+    <button class="pb-btn pb-btn--sm" id="play" title="Space or P" aria-pressed="true"><svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="patchbay/icons/lucide.svg#pause"/></svg><span>Pause</span></button>
+    <input type="range" class="pb-range app-scrub" id="scrub" min="0" max="1000" value="0" aria-label="Position in loop">
+    <span class="pb-text-muted pb-num app-clock" id="clock">0.0 / 20 s</span>
+    <span class="pb-toolbar__spacer"></span>
+    <span class="pb-text-muted pb-num app-meter" id="fpsMeter"></span>
+  </div>
+
+  <div class="app-body">
+    <aside class="app-side">
+      <div class="pb-row pb-row--wrap app-actions" role="group" aria-label="Randomize">
+        <button class="pb-btn pb-btn--sm" id="newColors" title="C"><svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="patchbay/icons/lucide.svg#palette"/></svg>New colors</button>
+        <button class="pb-btn pb-btn--sm" id="shuffle" title="S"><svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="patchbay/icons/lucide.svg#shuffle"/></svg>Shuffle</button>
+        <button class="pb-btn pb-btn--sm" id="reseed" title="N"><svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="patchbay/icons/lucide.svg#dices"/></svg>New seed</button>
+      </div>
+      <div class="pb-tabs" role="tablist" aria-label="Settings">
+        <button class="pb-tab" role="tab" id="tab-color" aria-selected="true" aria-controls="panel-color">Color</button>
+        <button class="pb-tab" role="tab" id="tab-shape" aria-selected="false" aria-controls="panel-shape" tabindex="-1">Shape</button>
+        <button class="pb-tab" role="tab" id="tab-motion" aria-selected="false" aria-controls="panel-motion" tabindex="-1">Motion</button>
+        <button class="pb-tab" role="tab" id="tab-output" aria-selected="false" aria-controls="panel-output" tabindex="-1">Output</button>
+      </div>
+      <div class="app-panels pb-scroll">
+
+      <div class="pb-tabpanel active app-panel" role="tabpanel" id="panel-color" aria-labelledby="tab-color">
+        <section class="pb-section">
+          <h2 class="pb-section__title">Palette</h2>
+          <div class="pb-form">
+            <label class="pb-form__label" for="mood">Mood</label>
+            <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="mood">
+              <option value="rich">Rich</option><option value="neon">Neon</option><option value="pastel">Pastel</option><option value="muted">Muted</option><option value="deep">Deep</option>
+            </select></span></div>
+            <label class="pb-form__label" for="harmony">Harmony</label>
+            <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="harmony">
+              <option value="auto">Surprise me</option><option value="analogous">Analogous</option><option value="complementary">Complementary</option><option value="split">Split complementary</option><option value="triadic">Triadic</option><option value="tetradic">Tetradic</option><option value="mono">Monochrome</option>
+            </select></span></div>
+            <label class="pb-form__label" for="ncol">Colors</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="ncol" min="1" max="6" value="4"><output></output></div>
+            <span class="pb-form__label">Swatches</span>
+            <div class="pb-form__field app-colors" id="colors">
+              <input type="color" class="pb-input" id="c0" value="#2f6bff" aria-label="Color 1">
+              <input type="color" class="pb-input" id="c1" value="#a63dff" aria-label="Color 2">
+              <input type="color" class="pb-input" id="c2" value="#e23ca8" aria-label="Color 3">
+              <input type="color" class="pb-input" id="c3" value="#19c2a0" aria-label="Color 4">
+              <input type="color" class="pb-input" id="c4" value="#ff7a1a" aria-label="Color 5">
+              <input type="color" class="pb-input" id="c5" value="#e6d22a" aria-label="Color 6">
+            </div>
+            <label class="pb-form__label" for="bg">Background</label>
+            <div class="pb-form__field"><input type="color" class="pb-input" id="bg" value="#0b0f1e"></div>
+            <span class="pb-form__label"></span>
+            <label class="pb-form__field pb-check"><input type="checkbox" class="pb-check__input" id="lock"><span class="pb-check__label">Keep color 1 when randomizing</span></label>
+          </div>
+          <p class="pb-note">C picks new colors from the mood and harmony. Turn on "Keep color 1" to build a palette around your own primary color.</p>
+        </section>
+        <section class="pb-section">
+          <h2 class="pb-section__title">Finish</h2>
+          <div class="pb-form">
+            <label class="pb-form__label" for="grain">Grain</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="grain" min="0" max="100" value="8"><output></output></div>
+            <label class="pb-form__label" for="seed">Seed</label>
+            <div class="pb-form__field"><span class="pb-number-wrap"><input type="number" class="pb-input" id="seed" min="0" max="999999999"></span></div>
+          </div>
+        </section>
+      </div>
+
+      <div class="pb-tabpanel app-panel" role="tabpanel" id="panel-shape" aria-labelledby="tab-shape">
+        <section class="pb-section" data-mode="blobs">
+          <h2 class="pb-section__title">Blobs</h2>
+          <div class="pb-form">
+            <label class="pb-form__label" for="count">Count</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="count" min="2" max="16" value="7"><output></output></div>
+            <label class="pb-form__label" for="size">Size</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="size" min="0" max="100" value="45"><output></output></div>
+            <label class="pb-form__label" for="soft">Softness</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="soft" min="0" max="100" value="25"><output></output></div>
+            <label class="pb-form__label" for="blend">Color blend</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="blend" min="0" max="100" value="50"><output></output></div>
+            <label class="pb-form__label" for="depth">Depth</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="depth" min="0" max="100" value="40"><output></output></div>
+            <label class="pb-form__label" for="glow">Glow</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="glow" min="0" max="100" value="30"><output></output></div>
+          </div>
+          <p class="pb-note">Softness at 0 gives hard lava-lamp edges. Turn it up for a smooth gradient wash.</p>
+        </section>
+        <section class="pb-section" data-mode="tiles">
+          <h2 class="pb-section__title">Tiles</h2>
+          <div class="pb-form">
+            <label class="pb-form__label" for="tile">Tile size (px)</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="tile" min="8" max="480" value="96"><output></output></div>
+            <label class="pb-form__label" for="gap">Gap</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="gap" min="0" max="40" value="6"><output></output></div>
+            <label class="pb-form__label" for="round">Rounding</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="round" min="0" max="100" value="15"><output></output></div>
+            <label class="pb-form__label" for="shade">Shade</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="shade" min="0" max="100" value="20"><output></output></div>
+          </div>
+          <p class="pb-note">Tile size is in pixels of the output resolution (Output tab). Tiles are always square. Gap is percent of a tile.</p>
+        </section>
+      </div>
+
+      <div class="pb-tabpanel app-panel" role="tabpanel" id="panel-motion" aria-labelledby="tab-motion">
+        <section class="pb-section">
+          <h2 class="pb-section__title">Loop</h2>
+          <div class="pb-form">
+            <label class="pb-form__label" for="loop">Loop (s)</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="loop" min="2" max="120" value="20"><output></output></div>
+          </div>
+          <p class="pb-note">Speed and Rate are whole cycles per loop, so the loop always repeats with no jump.</p>
+        </section>
+        <section class="pb-section" data-mode="blobs">
+          <h2 class="pb-section__title">Blob motion</h2>
+          <div class="pb-form">
+            <label class="pb-form__label" for="path">Path</label>
+            <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="path">
+              <option value="orbit">Orbit</option><option value="rise">Rise (lava lamp)</option><option value="sink">Sink</option>
+            </select></span></div>
+            <label class="pb-form__label" for="speed">Speed</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="speed" min="1" max="6" value="1"><output></output></div>
+            <label class="pb-form__label" for="wander">Wander</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="wander" min="0" max="100" value="50"><output></output></div>
+            <label class="pb-form__label" for="breathe">Breathe</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="breathe" min="0" max="100" value="30"><output></output></div>
+          </div>
+        </section>
+        <section class="pb-section" data-mode="tiles">
+          <h2 class="pb-section__title">Color pattern</h2>
+          <div class="pb-form">
+            <label class="pb-form__label" for="pattern">Pattern</label>
+            <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="pattern">
+              <option value="0">Random</option><option value="1">Wave</option><option value="2">Ripple</option><option value="3">Spiral</option><option value="4">Noise flow</option><option value="5">Plasma</option><option value="6">Rain</option>
+            </select></span></div>
+            <label class="pb-form__label" for="trans">Transition</label>
+            <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="trans">
+              <option value="0">Snap</option><option value="1">Ramp</option><option value="2">Ease</option><option value="3">Linear</option>
+            </select></span></div>
+            <label class="pb-form__label" for="ramp">Ramp length</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="ramp" min="1" max="100" value="30"><output></output></div>
+            <label class="pb-form__label" for="rate">Rate</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="rate" min="1" max="24" value="2"><output></output></div>
+            <label class="pb-form__label" for="scale">Scale</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="scale" min="1" max="40" value="6"><output></output></div>
+            <label class="pb-form__label" for="angle">Angle</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="angle" min="-180" max="180" value="30"><output></output></div>
+            <label class="pb-form__label" for="jitter">Jitter</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="jitter" min="0" max="100" value="15"><output></output></div>
+            <label class="pb-form__label" for="flash">Flash</label>
+            <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="flash" min="0" max="100" value="0"><output></output></div>
+          </div>
+          <p class="pb-note">Rate is color changes per loop for Random, and full palette cycles per loop for the others. Ramp length only applies to the Ramp transition. Jitter offsets each tile in time. Flash brightens a tile as it changes.</p>
+        </section>
+      </div>
+
+      <div class="pb-tabpanel app-panel" role="tabpanel" id="panel-output" aria-labelledby="tab-output">
+        <section class="pb-section">
+          <h2 class="pb-section__title">Size</h2>
+          <div class="pb-form">
+            <label class="pb-form__label" for="res">Resolution</label>
+            <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="res">
+              <option value="1920x1080">1920 × 1080</option>
+              <option value="2560x1440">2560 × 1440</option>
+              <option value="3840x2160" selected>3840 × 2160 (4K)</option>
+              <option value="3440x1440">3440 × 1440 (ultrawide)</option>
+              <option value="5120x1440">5120 × 1440 (super ultrawide)</option>
+              <option value="2880x1800">2880 × 1800 (laptop)</option>
+              <option value="1080x1920">1080 × 1920 (portrait)</option>
+              <option value="custom">Custom…</option>
+            </select></span></div>
+            <span class="pb-form__label" id="customLabel" hidden>Size</span>
+            <div class="pb-form__field pb-row" id="customRes" role="group" aria-labelledby="customLabel" hidden>
+              <span class="pb-number-wrap pb-w-sm"><input type="number" class="pb-input" id="w" min="320" max="16384" value="3840" aria-label="Width"></span>
+              <span class="pb-text-muted">×</span>
+              <span class="pb-number-wrap pb-w-sm"><input type="number" class="pb-input" id="h" min="320" max="16384" value="2160" aria-label="Height"></span>
+            </div>
+          </div>
+        </section>
+        <section class="pb-section">
+          <h2 class="pb-section__title">Still</h2>
+          <div class="pb-row pb-row--wrap">
+            <button class="pb-btn" id="exportPng"><svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="patchbay/icons/lucide.svg#image"/></svg>PNG</button>
+            <button class="pb-btn" id="fullBtn"><svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="patchbay/icons/lucide.svg#monitor"/></svg>Full window</button>
+          </div>
+          <p class="pb-note">PNG is taken at the scrubber position. Full window plays the loop over the whole page; Escape or double-click leaves.</p>
+        </section>
+        <section class="pb-section">
+          <h2 class="pb-section__title">Video loop</h2>
+          <div class="pb-form">
+            <label class="pb-form__label" for="codec">Codec</label>
+            <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="codec"><option value="hevc" selected>HEVC (H.265)</option><option value="avc">H.264</option></select></span></div>
+            <label class="pb-form__label" for="fps">Frame rate</label>
+            <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="fps"><option>24</option><option>25</option><option selected>30</option><option>50</option><option>60</option></select></span></div>
+            <label class="pb-form__label" for="vbr">Bitrate</label>
+            <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="vbr"><option value="12">12 Mbps</option><option value="25" selected>25 Mbps</option><option value="50">50 Mbps</option><option value="80">80 Mbps</option></select></span></div>
+          </div>
+          <div class="pb-row pb-row--wrap">
+            <button class="pb-btn" id="video"><svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="patchbay/icons/lucide.svg#film"/></svg>MP4 loop</button>
+            <button class="pb-btn pb-btn--outline" id="videoCancel" hidden>Cancel</button>
+          </div>
+          <div class="pb-progress" id="videoProgress" role="progressbar" aria-label="Video export" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><div class="pb-progress__bar" style="width: 0%"></div></div>
+          <p class="pb-note" id="videoInfo" aria-live="polite"></p>
+        </section>
+      </div>
+
+      </div>
+    </aside>
+
+    <main class="app-stage">
+      <div id="stage"></div>
+    </main>
+  </div>
+</div>
+
+<script src="mp4.js?v=5"></script>
+<script src="ambient.js?v=1"></script>
+</body>
+</html>

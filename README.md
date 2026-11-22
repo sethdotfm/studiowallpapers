@@ -10,6 +10,16 @@ python3 serve.py
 
 Then open http://localhost:8931, or this machine's IP on port 8931 from another computer. `serve.py [port] [host]` defaults to 8931 on 0.0.0.0 and tells browsers not to cache, so edits show on a normal reload. Opening `index.html` directly also works.
 
+## Studio Ambient (blobs and tiles)
+
+`ambient.html` is a spin-off for simple color loops instead of ribbons. Open http://localhost:8931/ambient.html, or use the "Blobs & tiles" link on the main page. Pick the style in the toolbar.
+
+- Blobs: soft shapes that merge like a lava lamp. Softness at 0 gives hard edges; high values give a smooth gradient wash. Color blend sets how much neighboring blob colors mix. Path is Orbit, Rise (lava lamp) or Sink.
+- Tiles: a grid of square tiles. Tile size is in pixels of the output resolution. Pattern picks how colors move (Random, Wave, Ripple, Spiral, Noise flow, Plasma, Rain). Transition is Snap, Ramp (hold, then fade over Ramp length), Ease or Linear. Jitter offsets each tile in time, Shade varies tile brightness, Flash brightens a tile as it changes.
+- Palette: Mood (Rich, Neon, Pastel, Muted, Deep) and Harmony (analogous, complementary, split, triadic, tetradic, monochrome) drive "New colors" (C). Colors are picked in OKLCH so they match in brightness. Turn on "Keep color 1" to build the palette around your own primary color.
+- Speed and Rate are whole cycles per loop, so every loop is seamless. MP4 loop and PNG export work like the main page (one screen, no bezels). Full window (F) plays it over the whole page.
+- Keys: Space or P plays, C new colors, S shuffle, N new seed, F full window. The URL keeps every setting.
+
 ## Controls
 
 - Resolution is the size of one screen. Columns and rows set the display grid, so 1920 × 1080 with 4 columns and 2 rows gives a 4 × 2 wall.
