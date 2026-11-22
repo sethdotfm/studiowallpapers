@@ -103,7 +103,8 @@ uniform vec2 uRes;
 uniform float uTau, uSeed, uGrain;
 uniform vec3 uCol[6];
 uniform int uN;
-uniform vec3 uBg;
+uniform vec3 uBg, uPaper;
+uniform vec4 uClip; // art area in output px (x0, y0, x1, y1), top-left origin; outside is plain paper
 out vec4 o;
 float hash12(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 float hash13(vec3 p) { p = fract(p * 0.1031); p += dot(p, p.zyx + 31.32); return fract((p.x + p.y) * p.z); }
@@ -114,6 +115,12 @@ vec3 finish(vec3 c) {
   float n = hash12(q) + hash12(q + 19.19) - 1.0;
   c += n * (1.5 / 255.0 + uGrain * 0.08);
   return clamp(c, 0.0, 1.0);
+}
+// Dither goes on the art only, so the paper border stays pure (unprinted) white.
+vec4 paper(vec3 art) {
+  vec2 fc = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);
+  vec2 cv = clamp(min(fc - uClip.xy, uClip.zw - fc) + 0.5, 0.0, 1.0);
+  return vec4(mix(uPaper, finish(art), cv.x * cv.y), 1.0);
 }
 `;
 
@@ -144,11 +151,13 @@ void main() {
   vec3 bg = uBg * mix(1.2, 0.75, p.y);
   vec3 col = mix(bg, c, m);
   col += c * uGlow * 0.45 * smoothstep(0.0, 1.0, F) * (1.0 - m);
-  o = vec4(finish(col), 1.0);
+  o = paper(col);
 }`;
 
 const FS_TILES = COMMON + `
-uniform float uCell, uGap, uRound, uRamp, uRate, uScale, uAngle, uJit, uShade, uFlash;
+uniform vec2 uOrigin;
+uniform vec3 uGapCol;
+uniform float uCell, uGapPx, uRound, uRamp, uRate, uScale, uAngle, uJit, uShade, uFlash;
 uniform int uPat, uTrans;
 float vn(vec3 p) {
   vec3 i = floor(p), f = fract(p);
@@ -159,9 +168,9 @@ float vn(vec3 p) {
 float fbm(vec3 p) { return 0.5 * vn(p) + 0.3 * vn(p * 2.03 + 7.1) + 0.2 * vn(p * 4.01 + 13.7); }
 void main() {
   vec2 fc = vec2(gl_FragCoord.x, uRes.y - gl_FragCoord.y);
-  vec2 g = (fc - uRes * 0.5) / uCell;
+  vec2 g = (fc - uOrigin) / uCell;
   vec2 cell = floor(g), l = fract(g) - 0.5;
-  vec2 c = (cell + 0.5) * uCell / uRes.y; // tile center in screen heights, 0 at screen center
+  vec2 c = ((cell + 0.5) * uCell + uOrigin - uRes * 0.5) / uRes.y; // tile center in screen heights, 0 at screen center
   float h = hash12(cell + uSeed);
   int ia, ib;
   float f;
@@ -206,12 +215,12 @@ void main() {
   // Flash right after a change: a snap or ramp lands on the new colour, the flash fades from there.
   if (uTrans <= 1) col += uFlash * 0.6 * pow(1.0 - raw, 8.0);
   // Rounded square with the gap around it, edge antialiased to one pixel.
-  float half_ = uCell * 0.5 * (1.0 - uGap);
+  float half_ = 0.5 * (uCell - uGapPx);
   float rad = uRound * half_;
   vec2 q = abs(l) * uCell - (half_ - rad);
   float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - rad;
-  float m = uGap <= 0.0 && uRound <= 0.0 ? 1.0 : clamp(0.5 - d, 0.0, 1.0);
-  o = vec4(finish(mix(uBg, col, m)), 1.0);
+  float m = uGapPx <= 0.0 && uRound <= 0.0 ? 1.0 : clamp(0.5 - d, 0.0, 1.0);
+  o = paper(mix(uGapCol, col, m));
 }`;
 
 function createRenderer() {
@@ -252,6 +261,7 @@ function createRenderer() {
       if (!loc) continue;
       if (typeof v === "number") gl.uniform1f(loc, v);
       else if (v.i !== undefined) gl.uniform1i(loc, v.i);
+      else if (v.v2) gl.uniform2fv(loc, v.v2);
       else if (v.v3) gl.uniform3fv(loc, v.v3);
       else if (v.v4) gl.uniform4fv(loc, v.v4);
     }
@@ -266,14 +276,45 @@ function createRenderer() {
 const IDS = ["mode", "mood", "harmony", "ncol", "c0", "c1", "c2", "c3", "c4", "c5", "bg", "lock", "grain", "seed",
   "count", "size", "soft", "blend", "depth", "glow", "path", "speed", "wander", "breathe",
   "tile", "gap", "round", "shade", "pattern", "trans", "ramp", "rate", "scale", "angle", "jitter", "flash",
-  "loop", "codec", "fps", "vbr"];
-const TEXT = new Set(["mode", "mood", "harmony", "c0", "c1", "c2", "c3", "c4", "c5", "bg", "path", "codec"]);
+  "loop", "codec", "fps", "vbr", "paper", "orient", "dpi", "border", "gapMm", "tileMm", "paperCol"];
+const TEXT = new Set(["mode", "mood", "harmony", "c0", "c1", "c2", "c3", "c4", "c5", "bg", "path", "codec", "paper", "orient", "paperCol"]);
+// Paper sizes in mm, portrait.
+const PAPER = { a6: [105, 148], a5: [148, 210], a4: [210, 297], letter: [215.9, 279.4] };
 
 function readSettings() {
   const [rw, rh] = $("res").value === "custom" ? [+$("w").value, +$("h").value] : $("res").value.split("x").map(Number);
   const p = { w: clamp(rw || 1920, 320, 16384), h: clamp(rh || 1080, 320, 16384), res: $("res").value };
   for (const id of IDS) p[id] = id === "lock" ? ($(id).checked ? 1 : 0) : TEXT.has(id) ? $(id).value : +$(id).value;
+  p.print = PAPER[p.paper] ? printGeom(p) : null;
+  if (p.print) { p.w = p.print.w; p.h = p.print.h; }
   return p;
+}
+
+// Print layout in output pixels. The tile pitch is chosen so whole tiles fill one side of the area inside
+// the border exactly; whatever is left on the other side goes into that side's border, split evenly.
+// Both axes are tried and the one that leaves less spare is used. Gap is exact.
+function printGeom(p) {
+  let [pw, ph] = PAPER[p.paper];
+  if (p.orient === "landscape") [pw, ph] = [ph, pw];
+  const px = p.dpi / 25.4, b = p.border, g = p.gapMm;
+  const iw = pw - 2 * b, ih = ph - 2 * b, target = p.tileMm + g;
+  const fit = (main, other) => {
+    const n = Math.max(1, Math.round((main + g) / target)), pitch = (main + g) / n;
+    const m = Math.max(1, Math.floor((other + g) / pitch + 1e-9));
+    return { n, m, pitch, spare: other + g - m * pitch };
+  };
+  const a = fit(iw, ih), c = fit(ih, iw);
+  const byW = a.spare <= c.spare;
+  const pitch = byW ? a.pitch : c.pitch, nx = byW ? a.n : c.m, ny = byW ? a.m : c.n;
+  const gw = nx * pitch - g, gh = ny * pitch - g; // grid size in mm, no gap on the outside
+  const bx = (pw - gw) / 2, by = (ph - gh) / 2;
+  const tiles = p.mode === "tiles";
+  // Blobs fill the plain border rect; tiles fill their grid.
+  const art = tiles ? [bx, by, bx + gw, by + gh] : [b, b, pw - b, ph - b];
+  return {
+    w: Math.round(pw * px), h: Math.round(ph * px), pw, ph, nx, ny, tileMm: pitch - g, bx, by,
+    clip: art.map((v) => v * px), pitch: pitch * px, gap: g * px, origin: [bx * px - (g * px) / 2, by * px - (g * px) / 2],
+  };
 }
 
 // Blob positions for this moment, on the CPU: 16 blobs is too few to be worth doing on the GPU.
@@ -305,10 +346,17 @@ function blobUniforms(p, tau) {
 function uniformsFor(p, tau, outH) {
   const cols = new Float32Array(18);
   for (let i = 0; i < 6; i++) cols.set(hexRgb(p["c" + i]), i * 3);
-  const u = { uTau: tau, uSeed: (p.seed % 9973) * 0.731, uGrain: p.grain / 100, uCol: { v3: cols }, uN: { i: p.ncol }, uBg: { v3: new Float32Array(hexRgb(p.bg)) } };
+  const k = outH / p.h, pr = p.print;
+  const paperRgb = new Float32Array(hexRgb(p.paperCol)), bgRgb = new Float32Array(hexRgb(p.bg));
+  const u = {
+    uTau: tau, uSeed: (p.seed % 9973) * 0.731, uGrain: p.grain / 100, uCol: { v3: cols }, uN: { i: p.ncol }, uBg: { v3: bgRgb },
+    uPaper: { v3: paperRgb }, uClip: { v4: new Float32Array(pr ? pr.clip.map((v) => v * k) : [-1, -1, 1e6, 1e6]) },
+  };
   if (p.mode === "blobs") return Object.assign(u, blobUniforms(p, tau));
   return Object.assign(u, {
-    uCell: Math.max(1, (p.tile * outH) / p.h), uGap: p.gap / 100, uRound: p.round / 100, uShade: p.shade / 100 * 0.6,
+    uCell: Math.max(1, (pr ? pr.pitch : p.tile) * k), uGapPx: pr ? pr.gap * k : (p.tile * k * p.gap) / 100,
+    uOrigin: { v2: new Float32Array(pr ? pr.origin.map((v) => v * k) : [p.w * k / 2, outH / 2]) },
+    uGapCol: { v3: pr ? paperRgb : bgRgb }, uRound: p.round / 100, uShade: p.shade / 100 * 0.6,
     uPat: { i: p.pattern }, uTrans: { i: p.trans }, uRamp: p.ramp / 100, uRate: p.rate, uScale: p.scale,
     uAngle: (p.angle * Math.PI) / 180, uJit: p.jitter / 100, uFlash: p.flash / 100,
   });
@@ -335,7 +383,15 @@ function layoutPreview() {
   current = { p, pw: Math.max(1, Math.round(cssW * dpr)), ph: Math.max(1, Math.round(cssH * dpr)) };
   document.querySelectorAll("[data-mode]").forEach((el) => (el.hidden = el.dataset.mode !== p.mode));
   for (let i = 0; i < 6; i++) $("c" + i).hidden = i >= p.ncol;
-  $("customRes").hidden = $("customLabel").hidden = p.res !== "custom";
+  $("customRes").hidden = $("customLabel").hidden = p.res !== "custom" || !!p.print;
+  $("res").disabled = !!p.print;
+  document.querySelectorAll("[data-print]").forEach((el) => (el.hidden = !p.print));
+  const pr = p.print, mm = (v) => +v.toFixed(1);
+  $("printInfo").textContent = !pr ? "Off: the page renders at the screen resolution below."
+    : `${pr.pw} × ${pr.ph} mm at ${p.dpi} dpi = ${pr.w} × ${pr.h} px. ` + (p.mode === "tiles"
+      ? `${pr.nx} × ${pr.ny} tiles of ${pr.tileMm.toFixed(2)} mm with ${p.gapMm} mm gaps. Border ${mm(pr.bx)} mm left and right, ${mm(pr.by)} mm top and bottom.`
+      : `Border ${p.border} mm.`);
+  $("tileNote").hidden = !pr;
   document.documentElement.style.setProperty("--accent", p.c0);
   history.replaceState(null, "", "#" + new URLSearchParams(Object.entries(p)).toString());
   clock.t %= p.loop;
@@ -491,8 +547,43 @@ async function exportPNG() {
     const c = document.createElement("canvas");
     c.width = p.w; c.height = p.h;
     c.getContext("2d").drawImage(R.canvas, 0, 0);
-    download(await new Promise((r) => c.toBlob(r, "image/png")), fileBase(p) + ".png");
+    let blob = await new Promise((r) => c.toBlob(r, "image/png"));
+    if (p.print) blob = await withDpi(blob, p.dpi);
+    download(blob, fileBase(p) + (p.print ? `-${p.paper}-${p.dpi}dpi` : "") + ".png");
   } finally { busy = false; changed(); }
+}
+
+// Adds a pHYs chunk so print dialogs and image apps open the PNG at its real size in mm.
+async function withDpi(blob, dpi) {
+  const src = new Uint8Array(await blob.arrayBuffer()), ppm = Math.round(dpi / 0.0254);
+  const chunk = new Uint8Array(21), dv = new DataView(chunk.buffer);
+  dv.setUint32(0, 9); chunk.set([112, 72, 89, 115], 4); dv.setUint32(8, ppm); dv.setUint32(12, ppm); chunk[16] = 1;
+  dv.setUint32(17, crc32(chunk.subarray(4, 17)));
+  const at = 33; // 8-byte signature + 25-byte IHDR chunk
+  return new Blob([src.subarray(0, at), chunk, src.subarray(at)], { type: "image/png" });
+}
+let crcTable;
+function crc32(bytes) {
+  if (!crcTable) crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  let c = 0xffffffff;
+  for (const b of bytes) c = crcTable[(c ^ b) & 255] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+// Browser print at exact paper size: the still goes in a print-only image sized in mm, page margins 0.
+function printStill() {
+  const p = readSettings();
+  if (!p.print) return;
+  draw(p, clock.t, p.w, p.h);
+  const url = R.canvas.toDataURL("image/png");
+  changed();
+  let img = $("printImg"), st = $("printStyle");
+  if (!img) { img = document.createElement("img"); img.id = "printImg"; document.body.append(img); st = document.createElement("style"); st.id = "printStyle"; document.head.append(st); }
+  st.textContent = `@page { size: ${p.print.pw}mm ${p.print.ph}mm; margin: 0; }
+    #printImg { display: none; }
+    @media print { body > *:not(#printImg) { display: none !important; } #printImg { display: block; width: ${p.print.pw}mm; height: ${p.print.ph}mm; } html, body { margin: 0; background: #fff; } }`;
+  img.onload = () => window.print();
+  img.src = url;
 }
 
 let videoAbort = null;
@@ -565,6 +656,8 @@ $("newColors").onclick = newColors;
 $("shuffle").onclick = shuffle;
 $("reseed").onclick = newSeed;
 $("exportPng").onclick = exportPNG;
+$("printPng").onclick = exportPNG;
+$("printBtn").onclick = printStill;
 $("video").onclick = exportVideo;
 $("videoCancel").onclick = () => videoAbort?.abort();
 $("fullBtn").onclick = () => setFull(true);

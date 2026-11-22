@@ -18,6 +18,7 @@ Then open http://localhost:8931, or this machine's IP on port 8931 from another 
 - Tiles: a grid of square tiles. Tile size is in pixels of the output resolution. Pattern picks how colors move (Random, Wave, Ripple, Spiral, Noise flow, Plasma, Rain). Transition is Snap, Ramp (hold, then fade over Ramp length), Ease or Linear. Jitter offsets each tile in time, Shade varies tile brightness, Flash brightens a tile as it changes.
 - Palette: Mood (Rich, Neon, Pastel, Muted, Deep) and Harmony (analogous, complementary, split, triadic, tetradic, monochrome) drive "New colors" (C). Colors are picked in OKLCH so they match in brightness. Turn on "Keep color 1" to build the palette around your own primary color.
 - Speed and Rate are whole cycles per loop, so every loop is seamless. MP4 loop and PNG export work like the main page (one screen, no bezels). Full window (F) plays it over the whole page.
+- Print (Output tab): pick a paper size (A6, A5, A4, US Letter), orientation and dpi, plus border, gap and tile size in mm. Tile size is a target: it is nudged so whole tiles fill the space, and the spare goes into the border. Border and gaps are paper color, so they get no ink. "Print PNG" saves a PNG tagged with its dpi; "Print…" opens the print dialog at the exact paper size. Print at 100% (actual size), not "fit to page".
 - Keys: Space or P plays, C new colors, S shuffle, N new seed, F full window. The URL keeps every setting.
 
 ## Controls

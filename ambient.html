@@ -47,7 +47,7 @@
   .app-colors input[type=color] { width: 2.75rem; padding: 2px; }
   .pb-number-wrap::before, .pb-number-wrap::after { z-index: 1; }
   .app-actions { flex: none; justify-content: center; padding: var(--pb-space-4) var(--pb-space-6); border-bottom: var(--pb-border-w) solid var(--pb-edge-soft); }
-  [data-mode][hidden] { display: none !important; }
+  [data-mode][hidden], [data-print][hidden], [hidden] { display: none !important; }
   @media (max-width: 768px) {
     body { min-width: 0; }
     .app { height: 100dvh; }
@@ -172,6 +172,7 @@
             <label class="pb-form__label" for="shade">Shade</label>
             <div class="pb-form__field pb-row"><input type="range" class="pb-range pb-grow" id="shade" min="0" max="100" value="20"><output></output></div>
           </div>
+          <p class="pb-note pb-note--warn" id="tileNote" hidden>Print is on: tile size and gap come from the Print section in the Output tab.</p>
           <p class="pb-note">Tile size is in pixels of the output resolution (Output tab). Tiles are always square. Gap is percent of a tile.</p>
         </section>
       </div>
@@ -229,6 +230,33 @@
       </div>
 
       <div class="pb-tabpanel app-panel" role="tabpanel" id="panel-output" aria-labelledby="tab-output">
+        <section class="pb-section">
+          <h2 class="pb-section__title">Print</h2>
+          <div class="pb-form">
+            <label class="pb-form__label" for="paper">Paper</label>
+            <div class="pb-form__field"><span class="pb-select-wrap"><select class="pb-select" id="paper">
+              <option value="off">Off (screen)</option><option value="a6">A6</option><option value="a5">A5</option><option value="a4">A4</option><option value="letter">US Letter</option>
+            </select></span></div>
+            <label class="pb-form__label" for="orient" data-print hidden>Orientation</label>
+            <div class="pb-form__field" data-print hidden><span class="pb-select-wrap"><select class="pb-select" id="orient"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></span></div>
+            <label class="pb-form__label" for="dpi" data-print hidden>Quality</label>
+            <div class="pb-form__field" data-print hidden><span class="pb-select-wrap"><select class="pb-select" id="dpi"><option value="150">150 dpi (draft)</option><option value="300" selected>300 dpi (print)</option><option value="600">600 dpi (fine)</option></select></span></div>
+            <label class="pb-form__label" for="border" data-print hidden>Border (mm)</label>
+            <div class="pb-form__field pb-row" data-print hidden><input type="range" class="pb-range pb-grow" id="border" min="0" max="30" step="0.5" value="10"><output></output></div>
+            <label class="pb-form__label" for="gapMm" data-print hidden>Gap (mm)</label>
+            <div class="pb-form__field pb-row" data-print hidden><input type="range" class="pb-range pb-grow" id="gapMm" min="0" max="5" step="0.1" value="1"><output></output></div>
+            <label class="pb-form__label" for="tileMm" data-print hidden>Tile (mm)</label>
+            <div class="pb-form__field pb-row" data-print hidden><input type="range" class="pb-range pb-grow" id="tileMm" min="2" max="50" step="0.5" value="8"><output></output></div>
+            <label class="pb-form__label" for="paperCol" data-print hidden>Paper</label>
+            <div class="pb-form__field" data-print hidden><input type="color" class="pb-input" id="paperCol" value="#ffffff"></div>
+          </div>
+          <p class="pb-note" id="printInfo"></p>
+          <div class="pb-row pb-row--wrap" data-print hidden>
+            <button class="pb-btn" id="printPng"><svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="patchbay/icons/lucide.svg#image"/></svg>Print PNG</button>
+            <button class="pb-btn" id="printBtn"><svg class="pb-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="patchbay/icons/lucide.svg#printer"/></svg>Print…</button>
+          </div>
+          <p class="pb-note" data-print hidden>Tile size is a target: it is nudged so whole tiles fill the space, and any spare goes into the border. Border and gaps are paper color (no ink). Print at 100% / actual size, not "fit to page".</p>
+        </section>
         <section class="pb-section">
           <h2 class="pb-section__title">Size</h2>
           <div class="pb-form">
@@ -288,6 +316,6 @@
 </div>
 
 <script src="mp4.js?v=5"></script>
-<script src="ambient.js?v=1"></script>
+<script src="ambient.js?v=2"></script>
 </body>
 </html>
